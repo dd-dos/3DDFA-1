@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
-# coding: utf-8
+from torch.utils.tensorboard import SummaryWriter
+
+writer = SummaryWriter()
 
 import os.path as osp
 from pathlib import Path
@@ -18,14 +19,19 @@ import torch.backends.cudnn as cudnn
 from utils.ddfa import DDFADataset, ToTensorGjz, NormalizeGjz
 from utils.ddfa import str2bool, AverageMeter
 from utils.io import mkdir
+from utils.scheduler import CyclicCosineDecayLR
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
+from utils.visualize import log_training_samples
+import tqdm
 
 # global args (configuration)
-args = None
 lr = None
+LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
+from clearml import Task
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-overfit-test")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
@@ -69,7 +75,6 @@ def parse_args():
 
     global args
     args = parser.parse_args()
-
     # some other operations
     args.devices_id = [int(d) for d in args.devices_id.split(',')]
     args.milestones = [int(m) for m in args.milestones.split(',')]
@@ -107,10 +112,11 @@ def adjust_learning_rate(optimizer, epoch, milestones=None):
 
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
-    logging.info(f'Save checkpoint to {filename}')
+    # logging.info(f'Save checkpoint to {filename}')
 
-
+ITER = 0
 def train(train_loader, model, criterion, optimizer, epoch):
+    global ITER
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -147,15 +153,20 @@ def train(train_loader, model, criterion, optimizer, epoch):
         end = time.time()
 
         # log
-        if i % args.print_freq == 0:
-            logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
-                         f'LR: {lr:8f}\t'
-                         f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                         # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                         f'Loss {losses.val:.4f} ({losses.avg:.4f})')
+        # if i % args.print_freq == 0:
+        #     logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
+        #                  f'LR: {lr:8f}\t'
+        #                  f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+        #                  # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+        #                  f'Loss {losses.val:.4f} ({losses.avg:.4f})')
+        
+        writer.add_scalar('Loss/Train', losses.avg, ITER)
+        ITER += 1
+        log_training_samples(input, output, target, writer, ITER, 'Train')
 
 
 def validate(val_loader, model, criterion, epoch):
+    global LOSS
     model.eval()
 
     end = time.time()
@@ -172,9 +183,35 @@ def validate(val_loader, model, criterion, epoch):
 
         elapse = time.time() - end
         loss = np.mean(losses)
-        logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-                     f'Loss {loss:.4f}\t'
-                     f'Time {elapse:.3f}')
+        # logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
+        #              f'Loss {loss:.4f}\t'
+        #              f'Time {elapse:.3f}')
+        writer.add_scalar('Loss/Val', loss, epoch)
+        log_training_samples(input, output, target, writer, epoch, 'Val')
+        if epoch==0:
+            LOSS=loss
+        else:
+            if loss <= LOSS:
+                LOSS = loss
+                filename = f'{args.snapshot}_best.pth.tar'
+                save_checkpoint(
+                    {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        # 'optimizer': optimizer.state_dict()
+                    },
+                    filename
+                )
+            else:
+                filename = f'{args.snapshot}_last.pth.tar'
+                save_checkpoint(
+                    {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        # 'optimizer': optimizer.state_dict()
+                    },
+                    filename
+                )
 
 
 def main():
@@ -238,17 +275,20 @@ def main():
         root=args.root,
         filelists=args.filelists_train,
         param_fp=args.param_fp_train,
-        transform=transforms.Compose([ToTensorGjz(), normalize])
+        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        aug=True
     )
+    
     val_dataset = DDFADataset(
         root=args.root,
         filelists=args.filelists_val,
         param_fp=args.param_fp_val,
-        transform=transforms.Compose([ToTensorGjz(), normalize])
+        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        aug=False
     )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers,
-                              shuffle=True, pin_memory=True, drop_last=True)
+                              shuffle=True, pin_memory=True, drop_last=False)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 
@@ -258,23 +298,17 @@ def main():
         logging.info('Testing from initial')
         validate(val_loader, model, criterion, args.start_epoch)
 
-    for epoch in range(args.start_epoch, args.epochs + 1):
-        # adjust learning rate
-        adjust_learning_rate(optimizer, epoch, args.milestones)
+    scheduler = CyclicCosineDecayLR(optimizer, 
+                                init_decay_epochs=10,
+                                min_decay_lr=1e-5,
+                                restart_interval = 3,
+                                restart_lr=1e-3)
 
+    for epoch in tqdm.tqdm(range(args.epochs)):
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
-        filename = f'{args.snapshot}_checkpoint_epoch_{epoch}.pth.tar'
-        save_checkpoint(
-            {
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                # 'optimizer': optimizer.state_dict()
-            },
-            filename
-        )
-
         validate(val_loader, model, criterion, epoch)
+        scheduler.step()
 
 
 if __name__ == '__main__':

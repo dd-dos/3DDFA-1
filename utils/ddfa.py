@@ -4,7 +4,7 @@
 import os.path as osp
 from pathlib import Path
 import numpy as np
-
+import random
 import torch
 import torch.utils.data as data
 import cv2
@@ -12,6 +12,7 @@ import pickle
 import argparse
 from .io import _numpy_to_tensor, _load_cpu, _load_gpu
 from .params import *
+from .augment import rotate_samples
 
 
 def _parse_param(param):
@@ -111,12 +112,13 @@ class NormalizeGjz(object):
 
 
 class DDFADataset(data.Dataset):
-    def __init__(self, root, filelists, param_fp, transform=None, **kargs):
+    def __init__(self, root, filelists, param_fp, transform=None, aug=True, **kargs):
         self.root = root
         self.transform = transform
         self.lines = Path(filelists).read_text().strip().split('\n')
         self.params = _numpy_to_tensor(_load_cpu(param_fp))
         self.img_loader = img_loader
+        self.aug = aug  
 
     def _target_loader(self, index):
         target = self.params[index]
@@ -129,11 +131,17 @@ class DDFADataset(data.Dataset):
 
         target = self._target_loader(index)
 
+        if self.aug:
+            angles = np.linspace(0, 360, num=13)
+            img, target = rotate_samples(img, target, random.choice(angles))
+
         if self.transform is not None:
             img = self.transform(img)
+        
         return img, target
 
     def __len__(self):
+        return 32
         return len(self.lines)
 
 

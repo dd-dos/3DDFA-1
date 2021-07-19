@@ -30,3 +30,8 @@ PAF/
 
 samples/*.obj
 .vscode/
+logs
+snapshot
+train_aug_120x120
+runs
+*.zip
