@@ -1,0 +1,4 @@
+outs:
+- md5: ae904b72346885d467954acbb7ebbb8c
+  size: 13224249
+  path: phase1_wpdc_best.pth.tar

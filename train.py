@@ -24,21 +24,20 @@ from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
 from utils.visualize import log_training_samples
 import tqdm
-
 # global args (configuration)
 lr = None
 LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-overfit-test")
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Adam-CyclicCosineDecayLR")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
     parser.add_argument('-j', '--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
     parser.add_argument('--start-epoch', default=1, type=int)
-    parser.add_argument('-b', '--batch-size', default=128, type=int)
+    parser.add_argument('-b', '--train-batch-size', default=128, type=int)
     parser.add_argument('-vb', '--val-batch-size', default=32, type=int)
     parser.add_argument('--base-lr', '--learning-rate', default=0.001, type=float)
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
@@ -121,12 +120,15 @@ def train(train_loader, model, criterion, optimizer, epoch):
     data_time = AverageMeter()
     losses = AverageMeter()
 
-    model.train()
+    num_samples = train_loader.dataset.__len__()
 
+    # Logging after every $(logging_step) iterations
+    logging_step = np.ceil(num_samples/(10*args.train_batch_size))
+    top_loss = 0
     end = time.time()
-    # loader is batch style
-    # for i, (input, target) in enumerate(train_loader):
-    for i, (input, target) in enumerate(train_loader):
+
+    model.train()
+    for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
         target.requires_grad = False
         target = target.cuda(non_blocking=True)
         output = model(input)
@@ -152,17 +154,32 @@ def train(train_loader, model, criterion, optimizer, epoch):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        # log
-        # if i % args.print_freq == 0:
-        #     logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t'
-        #                  f'LR: {lr:8f}\t'
-        #                  f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-        #                  # f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-        #                  f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-        
-        writer.add_scalar('Loss/Train', losses.avg, ITER)
+        if loss.item() >= top_loss:
+            top_loss = loss.item()
+            top_loss_samples = {
+                'input': input,
+                'target': target,
+                'output': output
+            }
+
+        if i%logging_step==logging_step-1:
+            logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t' 
+                         f'LR: {lr:8f}\t' 
+                         f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
+                         f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
+                         f'Loss {losses.val:.4f} ({losses.avg:.4f})')
+            log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train')
+            writer.add_scalar('Loss/Train', losses.avg, ITER)
+
+            # Log top-loss samples.
+            input = top_loss_samples['input']
+            target = top_loss_samples['target']
+            output = top_loss_samples['output']
+
+            log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train/Top-loss')
+            writer.add_scalar('Top-loss/Train', losses.avg, ITER)
+
         ITER += 1
-        log_training_samples(input, output, target, writer, ITER, 'Train')
 
 
 def validate(val_loader, model, criterion, epoch):
@@ -171,7 +188,8 @@ def validate(val_loader, model, criterion, epoch):
 
     end = time.time()
     with torch.no_grad():
-        losses = []
+        losses = AverageMeter()
+        top_loss = 0
         for i, (input, target) in enumerate(val_loader):
             # compute output
             target.requires_grad = False
@@ -179,20 +197,36 @@ def validate(val_loader, model, criterion, epoch):
             output = model(input)
 
             loss = criterion(output, target)
-            losses.append(loss.item())
+            losses.update(loss.item(), input.size(0))
+
+            if loss.item() >= top_loss:
+                top_loss = loss.item()
+                top_loss_samples = {
+                    'input': input,
+                    'target': target,
+                    'output': output
+                }
 
         elapse = time.time() - end
-        loss = np.mean(losses)
-        # logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-        #              f'Loss {loss:.4f}\t'
-        #              f'Time {elapse:.3f}')
-        writer.add_scalar('Loss/Val', loss, epoch)
+        logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
+                     f'Loss {losses.avg:.4f}\t'
+                     f'Time {elapse:.3f}')
+        writer.add_scalar('Loss/Val', losses.avg, epoch)
         log_training_samples(input, output, target, writer, epoch, 'Val')
+
+        # Log top-loss samples.
+        input = top_loss_samples['input']
+        target = top_loss_samples['target']
+        output = top_loss_samples['output']
+
+        log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
+        writer.add_scalar('Top-loss/Val', losses.avg, ITER)
+
         if epoch==0:
-            LOSS=loss
+            LOSS=losses.avg
         else:
-            if loss <= LOSS:
-                LOSS = loss
+            if losses.avg <= LOSS:
+                LOSS = losses.avg
                 filename = f'{args.snapshot}_best.pth.tar'
                 save_checkpoint(
                     {
@@ -233,8 +267,8 @@ def main():
     model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
 
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
-
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
+    # model.to(cuda)
 
     # step2: optimization: loss and optimization method
     # criterion = nn.MSELoss(size_average=args.size_average).cuda()
@@ -257,7 +291,7 @@ def main():
     #                          weight_decay=args.weight_decay,
     #                         nesterov=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
     # step 2.1 resume
     if args.resume:
         if Path(args.resume).is_file():
@@ -289,29 +323,30 @@ def main():
         aug=False
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.workers,
+    train_loader = DataLoader(train_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=False)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 
     # step4: run
     cudnn.benchmark = True
-    if args.test_initial:
-        logging.info('Testing from initial')
-        validate(val_loader, model, criterion, args.start_epoch)
+    # if args.test_initial:
+    #     logging.info('Testing from initial')
+    #     validate(val_loader, model, criterion, args.start_epoch)
 
     scheduler = CyclicCosineDecayLR(optimizer, 
                                 init_decay_epochs=10,
-                                min_decay_lr=1e-6,
+                                min_decay_lr=1e-7,
                                 restart_interval = 5,
-                                restart_lr=1e-4)
-
-    for epoch in tqdm.tqdm(range(args.epochs)):
+                                restart_lr=1e-5)
+    global lr
+    lr = args.base_lr
+    for epoch in range(args.epochs):
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
         validate(val_loader, model, criterion, epoch)
         scheduler.step()
-
+        lr = scheduler.get_lr()[0]
 
 if __name__ == '__main__':
     main()
