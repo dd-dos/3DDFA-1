@@ -251,11 +251,13 @@ def main():
     else:
         raise Exception(f'Unknown Loss {args.loss}')
 
-    optimizer = torch.optim.SGD(model.parameters(),
-                                lr=args.base_lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay,
-                                nesterov=True)
+    # optimizer = torch.optim.SGD(model.parameters(),
+    #                            lr=args.base_lr,
+    #                           momentum=args.momentum,
+    #                          weight_decay=args.weight_decay,
+    #                         nesterov=True)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # step 2.1 resume
     if args.resume:
         if Path(args.resume).is_file():
@@ -300,9 +302,9 @@ def main():
 
     scheduler = CyclicCosineDecayLR(optimizer, 
                                 init_decay_epochs=10,
-                                min_decay_lr=1e-5,
-                                restart_interval = 3,
-                                restart_lr=1e-3)
+                                min_decay_lr=1e-6,
+                                restart_interval = 5,
+                                restart_lr=1e-4)
 
     for epoch in tqdm.tqdm(range(args.epochs)):
         # train for one epoch
