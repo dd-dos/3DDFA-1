@@ -10,7 +10,7 @@ def crop_balance(img, detected_face, expand_ratio=1):
     base_length = int(max(box_height, box_width))
     length = base_length*expand_ratio
 
-    center = [det[0]+(det[2]-det[0])/2, det[1]+(det[3]-det[1])/2]
+    center = np.array([det[0]+(det[2]-det[0])/2, det[1]+(det[3]-det[1])/2])
         
     x1 = int(center[0]-length/2)
     x2 = int(center[0]+length/2)
@@ -19,8 +19,9 @@ def crop_balance(img, detected_face, expand_ratio=1):
     
     # Crop image and adjust center
     cropped_img = img[y1:y2, x1:x2]
+    inp_shape = np.array([x1, y1, x2, y2])
 
-    return cropped_img, length, center
+    return cropped_img, length, center, inp_shape
 
 def cropped_to_orginal(pts, length, center, resize):
     """
@@ -34,10 +35,7 @@ def cropped_to_orginal(pts, length, center, resize):
     :resize: resize size if the cropped image is resized.
     """
     coord_original_cropped_pts = pts / resize * length
-    top = center[0]-length/2
-    left = center[1]+length/2
+    coord_original_cropped_pts.T[0] += center[0]-length/2
+    coord_original_cropped_pts.T[1] += center[1]-length/2
 
-    coord_original_cropped_pts.T[0] += left
-    coord_original_cropped_pts.T[1] += top
-
-    return pts
+    return coord_original_cropped_pts

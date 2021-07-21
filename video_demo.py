@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # coding: utf-8
+from scipy.misc.common import face
 import torch
 import torchvision.transforms as transforms
 import mobilenet_v1
 import numpy as np
 import cv2
-import dlib
+# import dlib
 from utils.ddfa import ToTensorGjz, NormalizeGjz
 import scipy.io as sio
 from utils.inference import (
@@ -53,9 +54,10 @@ def main(args):
     model.eval()
 
     # 2. load dlib model for face detection and landmark used for face cropping
-    dlib_landmark_model = 'models/shape_predictor_68_face_landmarks.dat'
-    face_regressor = dlib.shape_predictor(dlib_landmark_model)
-    face_detector = dlib.get_frontal_face_detector()
+    # dlib_landmark_model = 'models/shape_predictor_68_face_landmarks.dat'
+    # face_regressor = dlib.shape_predictor(dlib_landmark_model)
+    # face_detector = dlib.get_frontal_face_detector()
+    face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
     # 3. forward
     success, frame = vc.read()

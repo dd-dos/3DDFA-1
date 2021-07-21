@@ -23,6 +23,7 @@ class DenseFaceModel:
         for k in checkpoint.keys():
             model_dict[k.replace('module.', '')] = checkpoint[k]
         self.dense_face_model.load_state_dict(model_dict)
+        self.dense_face_model.eval()
 
         self.input_size = input_size
         normalize = ddfa.NormalizeGjz(mean=127.5, std=128)  # may need optimization
@@ -60,10 +61,9 @@ class DenseFaceModel:
         landmarks = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(img, det, expand_ratio=1)
+            cropped_inp, length, center, inp_shape = imutils.crop_balance(img, det, expand_ratio=1.2)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size))
             base_inp = inp.copy()
-
             inp = self.transformer(inp)
             inp = inp.to(device)
             inp.unsqueeze_(0)
@@ -80,6 +80,7 @@ class DenseFaceModel:
             det -= pad
 
             landmarks.append(pts_img)
+            # detected_faces[idx] = torch.tensor(inp_shape)
 
         return landmarks, original_img, detected_faces        
 

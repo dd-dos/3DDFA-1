@@ -31,7 +31,7 @@ PAF/
 samples/*.obj
 .vscode/
 logs
-*.pth.tar
+*.pth.tar   
 train_aug_120x120
 runs
 *.zip
