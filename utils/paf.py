@@ -2,14 +2,14 @@
 # coding: utf-8
 
 import numpy as np
-from .ddfa import _parse_param
+from .ddfa import parse_param
 from .params import u_filter, w_filter, w_exp_filter, std_size, param_mean, param_std
 
 
 def reconstruct_paf_anchor(param, whitening=True):
     if whitening:
         param = param * param_std + param_mean
-    p, offset, alpha_shp, alpha_exp = _parse_param(param)
+    p, offset, alpha_shp, alpha_exp = parse_param(param)
     anchor = p @ (u_filter + w_filter @ alpha_shp + w_exp_filter @ alpha_exp).reshape(3, -1, order='F') + offset
     anchor[1, :] = std_size + 1 - anchor[1, :]
     return anchor[:2, :]

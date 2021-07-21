@@ -54,7 +54,7 @@ def rotate_vertex(img, param, angle):
 
     if len(param) == 62:
         param = param * param_std + param_mean
-    # p, offset, alpha_shp, alpha_exp = ddfa_utils._parse_param(param)
+    # p, offset, alpha_shp, alpha_exp = ddfa_utils.parse_param(param)
 
     p_ = param[:12].reshape(3, -1)
     p = p_[:, :3]

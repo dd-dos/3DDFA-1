@@ -3,9 +3,10 @@ import logging
 import sys
 from pathlib import Path
 import cv2
-import df_model
+from densefacelib.models import DenseFaceModel
 import torch
 import time
+
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -53,8 +54,8 @@ def test_video(args):
             logging.error(f'Invalid save path: {path}.')
             save_video = False
 
-    dense_model = df_model.DenseFaceModel(args.model_path,
-                                    args.detector_path)
+    dense_model = DenseFaceModel(args.model_path,
+                                args.detector_path)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -67,6 +68,7 @@ def test_video(args):
         key = cv2.waitKey(1) & 0xFF
 
         processed_frame = dense_model.draw_landmarks(frame)
+        # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         # logging.info(f'Landmarks detection took {time.time() - time0}')
      
         if save_video:
@@ -87,8 +89,8 @@ def test_video(args):
     print("The video was successfully saved")
 
 def test_image(args):
-    dense_model = df_model.DenseFaceModel(args.model_path,
-                                    args.detector_path)
+    dense_model = DenseFaceModel(args.model_path,
+                                args.detector_path)
     img = cv2.imread(args.img_path)
     processed_frame = dense_model.draw_landmarks(args.img_path, detected_faces=torch.tensor([[0,0,img.shape[0], img.shape[0]]]))
     cv2.imshow('', processed_frame)

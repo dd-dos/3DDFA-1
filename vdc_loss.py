@@ -9,7 +9,7 @@ from utils.params import *
 _to_tensor = _numpy_to_cuda  # gpu
 
 
-def _parse_param_batch(param):
+def parse_param_batch(param):
     """Work for both numpy and tensor"""
     N = param.shape[0]
     p_ = param[:, :12].view(N, 3, -1)
@@ -45,8 +45,8 @@ class VDCLoss(nn.Module):
         param_gt = target * self.param_std + self.param_mean
 
         # parse param
-        p, offset, alpha_shp, alpha_exp = _parse_param_batch(param)
-        pg, offsetg, alpha_shpg, alpha_expg = _parse_param_batch(param_gt)
+        p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
+        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
 
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 

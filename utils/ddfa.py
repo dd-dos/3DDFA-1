@@ -15,7 +15,7 @@ from .params import *
 from .augment import rotate_samples
 
 
-def _parse_param(param):
+def parse_param(param):
     """Work for both numpy and tensor"""
     p_ = param[:12].reshape(3, -1)
     p = p_[:, :3]
@@ -40,7 +40,7 @@ def reconstruct_vertex(param, whitening=True, dense=False, transform=True):
             param = np.concatenate((param[:11], [0], param[11:]))
             param = param * param_std + param_mean
 
-    p, offset, alpha_shp, alpha_exp = _parse_param(param)
+    p, offset, alpha_shp, alpha_exp = parse_param(param)
 
     if dense:
         vertex = p @ (u + w_shp @ alpha_shp + w_exp @ alpha_exp).reshape(3, -1, order='F') + offset
