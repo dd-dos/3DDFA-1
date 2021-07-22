@@ -228,7 +228,7 @@ def validate(val_loader, model, criterion, epoch):
                      f'Time {elapse:.3f}')
         writer.add_scalar('VDC_Loss/Val', vdc_losses.avg, ITER)
         writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
-        writer.add_scaler('Loss/Val', losses.avg, ITER)
+        writer.add_scalar('Loss/Val', losses.avg, ITER)
 
         # Log top-loss samples.
         input = top_loss_samples['input']
