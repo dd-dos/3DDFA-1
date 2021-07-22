@@ -75,6 +75,7 @@ def parse_args():
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
     parser.add_argument('--resample-num', default=132, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
+    parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
 
     global args
     args = parser.parse_args()
@@ -118,7 +119,7 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
     # logging.info(f'Save checkpoint to {filename}')
 
 ITER = 0
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
     global ITER
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -139,27 +140,22 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         data_time.update(time.time() - end)
 
-        if args.loss.lower() == 'vdc':
-            loss = criterion(output, target)
-        elif args.loss.lower() == 'wpdc':
-            loss = criterion(output, target)
-        elif args.loss.lower() == 'pdc':
-            loss = criterion(output, target)
-        else:
-            raise Exception(f'Unknown loss {args.loss}')
+        wpdc_loss_value = wpdc_loss(output, target)
+        vdc_loss_value = vdc_loss(output, target)
+        total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
 
-        losses.update(loss.item(), input.size(0))
+        losses.update(total_loss.item(), input.size(0))
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
         optimizer.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if loss.item() >= top_loss:
-            top_loss = loss.item()
+        if total_loss.item() >= top_loss:
+            top_loss = total_loss.item()
             top_loss_samples = {
                 'input': input,
                 'target': target,
@@ -181,7 +177,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
             output = top_loss_samples['output']
 
             log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train/Top-loss')
-            writer.add_scalar('Top-loss/Train', losses.avg, ITER)
 
         ITER += 1
 
@@ -228,7 +223,6 @@ def validate(val_loader, model, criterion, epoch):
                      f'Time {elapse:.3f}')
         writer.add_scalar('VDC_Loss/Val', vdc_losses.avg, ITER)
         writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
-        writer.add_scalar('Loss/Val', losses.avg, ITER)
 
         # Log top-loss samples.
         input = top_loss_samples['input']
@@ -353,13 +347,15 @@ def main():
     scheduler = CyclicCosineDecayLR(optimizer, 
                                 init_decay_epochs=10,
                                 min_decay_lr=1e-7,
-                                restart_interval = 5,
+                                restart_interval = 3,
                                 restart_lr=1e-5)
     global lr
     lr = args.base_lr
+    wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
+    vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
     for epoch in range(args.epochs):
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch)
+        train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
         validate(val_loader, model, criterion, epoch)
         scheduler.step()
         lr = scheduler.get_lr()[0]

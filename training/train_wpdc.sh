@@ -21,10 +21,10 @@ python3 train.py --arch="mobilenet_1" \
     --epochs=9999 \
     --milestones=30,40 \
     --print-freq=50 \
-    --devices-id=1 \
+    --devices-id=0 \
     --workers=16 \
     --filelists-train="train.configs/train_aug_120x120.list.train" \
     --filelists-val="train.configs/train_aug_120x120.list.val" \
     --root="train.configs/train_aug_120x120" \
     --log-file="${LOG_FILE}" \
-    --resume "snapshot/phase1_wpdc_best.pth.tar"
+    --resume "snapshot/2021-07-22/best.pth.tar"

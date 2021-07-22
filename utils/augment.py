@@ -37,7 +37,7 @@ def hide_face(img, param):
 
     if np.random.rand() < 0.5:
         # vertex = ddfa.reconstruct_vertex(param.astype(np.float32))
-        # bbox = get_landmarks_wrapbox(vertex[:2].T)
+        # bbox = get_landmarks_wrapbox(vertex[:2].T)    
         size, _, _ = img.shape
         bbox = [int(size/4), int(size/4), int(3*size/4), int(3*size/4)]
         img = hand_face(img, bbox)

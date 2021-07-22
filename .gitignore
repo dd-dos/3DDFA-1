@@ -38,3 +38,4 @@ runs
 *.pt
 
 densefacelib
+*.png
