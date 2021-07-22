@@ -12,7 +12,7 @@ import pickle
 import argparse
 from .io import _numpy_to_tensor, _load_cpu, _load_gpu
 from .params import *
-from .augment import rotate_samples
+from .augment import ddfa_augment
 
 
 def parse_param(param):
@@ -132,8 +132,7 @@ class DDFADataset(data.Dataset):
         target = self._target_loader(index)
 
         if self.aug:
-            angles = np.linspace(0, 360, num=13)
-            img, target = rotate_samples(img, target, random.choice(angles))
+            img, target = ddfa_augment(img, target)
 
         if self.transform is not None:
             img = self.transform(img)
