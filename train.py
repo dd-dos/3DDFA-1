@@ -192,10 +192,10 @@ def validate(val_loader, model, criterion, epoch):
 
     end = time.time()
     wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
-    wdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    vdc_criterion = VDCLoss(opt_style=args.opt_style).cuda()
 
     with torch.no_grad():
-        wdc_losses = AverageMeter()
+        vdc_losses = AverageMeter()
         wpdc_losses = AverageMeter()
         losses = AverageMeter()
         top_loss = 0
@@ -205,8 +205,8 @@ def validate(val_loader, model, criterion, epoch):
             target = target.cuda(non_blocking=True)
             output = model(input)
 
-            loss = wdc_criterion(output, target)
-            wdc_losses.update(loss.item(), input.size(0))
+            loss = vdc_criterion(output, target)
+            vdc_losses.update(loss.item(), input.size(0))
 
             loss = wpdc_criterion(output, target)
             wpdc_losses.update(loss.item(), input.size(0))
@@ -224,11 +224,11 @@ def validate(val_loader, model, criterion, epoch):
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-                     f'Loss {wdc_losses.avg:.4f}\t'
+                     f'Loss {vdc_losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
-        writer.add_scalar('WDC_Loss/Val', wdc_losses.avg, ITER)
+        writer.add_scalar('VDC_Loss/Val', vdc_losses.avg, ITER)
         writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
-        log_training_samples(input, output, target, writer, ITER, 'Val')
+        writer.add_scaler('Loss/Val', losses.avg, ITER)
 
         # Log top-loss samples.
         input = top_loss_samples['input']
@@ -236,7 +236,7 @@ def validate(val_loader, model, criterion, epoch):
         output = top_loss_samples['output']
 
         log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
-        writer.add_scalar('Top-loss/Val', wdc_losses.avg, ITER)
+        writer.add_scalar('Top-loss/Val', top_loss, ITER)
 
         if epoch==0:
             LOSS=losses.avg

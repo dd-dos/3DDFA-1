@@ -8,6 +8,7 @@ import numpy as np
 import argparse
 import time
 import logging
+import copy
 
 import torch
 import torch.nn as nn
@@ -130,9 +131,12 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
     # Logging after every $(logging_step) iterations
     logging_step = np.ceil(num_samples/(10*args.train_batch_size))
     top_loss = 0
+    meta_train = args.lookahead
     end = time.time()
 
     model.train()
+    vdc_model = model
+    wpdc_model = model.
     for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
         target.requires_grad = False
         target = target.cuda(non_blocking=True) 
@@ -192,7 +196,7 @@ def validate(val_loader, model, criterion, epoch):
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
                      f'Loss {losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
-        writer.add_scalar('WDC_Loss/Val', losses.avg, ITER)
+        writer.add_scalar('VDC_Loss/Val', losses.avg, ITER)
         writer.add_scalar('WPDC_Loss/Val', foo_losses.avg, ITER)
         log_training_samples(input, output, target, writer, ITER, 'Val')
 
