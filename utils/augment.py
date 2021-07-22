@@ -17,7 +17,7 @@ hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
 def ddfa_augment(img, param):
-    if np.random < 0.5:
+    if np.random.rand() < 0.5:
         img = hide_face(img, param)
 
     if np.random.rand() < 0.95:
