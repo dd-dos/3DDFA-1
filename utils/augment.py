@@ -15,7 +15,7 @@ vanilla_aug = iaa.OneOf([
     iaa.Grayscale(),
     iaa.imgcorruptlike.Pixelate(severity=(1, 3)),	
     iaa.imgcorruptlike.JpegCompression(severity=(3, 5)),	
-    iaa.KMeansColorQuantization(n_colors=(70, 100)),	
+    iaa.KMeansColorQuantization(n_colors=(80, 100)),	
     iaa.UniformColorQuantization(n_colors=(10, 15)),
     # iaa.MotionBlur(k=(10, 15), angle=(-45, 45)),
     # iaa.GaussianBlur((2.0, 5.0)),
@@ -54,18 +54,12 @@ def rotate_vertex(img, param, angle):
 
     if len(param) == 62:
         param = param * param_std + param_mean
-    # p, offset, alpha_shp, alpha_exp = ddfa_utils.parse_param(param)
 
     p_ = param[:12].reshape(3, -1)
     p = p_[:, :3]
-    # offset = p_[:, 3].reshape(3, 1)
     offset = np.zeros((3,1), dtype=np.float64)
     offset[:,0] = p_[:, 3]
-    alpha_shp = param[12:52].reshape(-1, 1)
-    alpha_exp = param[52:].reshape(-1, 1)
     
-    # img = cv2.flip(img,0)
-    # rotate_matrix = angle2rotmat(angle / 180 * math.pi)
     rad_angle = angle / 180 * math.pi
     rotate_matrix = np.array([
         [np.cos(rad_angle), -np.sin(rad_angle), 0.],
@@ -103,19 +97,9 @@ def ddfa_augment(img, param):
     if np.random.rand() < 0.95:
         img = vanilla_aug(image=img)
    
-    # img, param = rotate_vertex(img, param, 90)
-    # vertex = ddfa_utils.reconstruct_vertex(param.numpy())
-
-    # pts = vertex[:2].T
-    # for _pts in pts:
-    #     _pts = tuple(_pts.astype(np.uint8))
-    #     cv2.circle(img, _pts, 3, (0,255,0), -1, 10)
-
-    if np.random.rand() > 0.75:
+    if np.random.rand() > 0.5:
         angles = np.linspace(0, 360, num=13)
         img, param = rotate_vertex(img, param, random.choice(angles))
-    else:
-        img, param = rotate_vertex(img, param, 180)
 
     return img, param
 
