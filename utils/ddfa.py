@@ -140,6 +140,7 @@ class DDFADataset(data.Dataset):
         return img, target
 
     def __len__(self):
+        return 1
         return len(self.lines)
 
 

@@ -191,11 +191,13 @@ def validate(val_loader, model, criterion, epoch):
     model.eval()
 
     end = time.time()
-    foo_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    wdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
 
     with torch.no_grad():
+        wdc_losses = AverageMeter()
+        wpdc_losses = AverageMeter()
         losses = AverageMeter()
-        foo_losses = AverageMeter()
         top_loss = 0
         for i, (input, target) in enumerate(val_loader):
             # compute output
@@ -203,11 +205,14 @@ def validate(val_loader, model, criterion, epoch):
             target = target.cuda(non_blocking=True)
             output = model(input)
 
+            loss = wdc_criterion(output, target)
+            wdc_losses.update(loss.item(), input.size(0))
+
+            loss = wpdc_criterion(output, target)
+            wpdc_losses.update(loss.item(), input.size(0))
+
             loss = criterion(output, target)
             losses.update(loss.item(), input.size(0))
-
-            foo_loss = foo_criterion(output, target)
-            foo_losses.update(foo_loss.item(), input.size(0))
 
             if loss.item() >= top_loss:
                 top_loss = loss.item()
@@ -219,10 +224,10 @@ def validate(val_loader, model, criterion, epoch):
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-                     f'Loss {losses.avg:.4f}\t'
+                     f'Loss {wdc_losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
-        writer.add_scalar('WDC_Loss/Val', losses.avg, ITER)
-        writer.add_scalar('WPDC_Loss/Val', foo_losses.avg, ITER)
+        writer.add_scalar('WDC_Loss/Val', wdc_losses.avg, ITER)
+        writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
         log_training_samples(input, output, target, writer, ITER, 'Val')
 
         # Log top-loss samples.
@@ -231,7 +236,7 @@ def validate(val_loader, model, criterion, epoch):
         output = top_loss_samples['output']
 
         log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
-        writer.add_scalar('Top-loss/Val', losses.avg, ITER)
+        writer.add_scalar('Top-loss/Val', wdc_losses.avg, ITER)
 
         if epoch==0:
             LOSS=losses.avg

@@ -31,6 +31,9 @@ def ddfa_augment(img, param):
 
 
 def hide_face(img, param):
+    if isinstance(param, torch.Tensor):
+        param = param.numpy()
+
     if np.random.rand() < 0.5:
         vertex = ddfa.reconstruct_vertex(param)
         bbox = get_landmarks_wrapbox(vertex[:2].T)
