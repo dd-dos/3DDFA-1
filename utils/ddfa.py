@@ -13,7 +13,7 @@ import argparse
 from .io import _numpy_to_tensor, _load_cpu, _load_gpu
 from .params import *
 from .augment import ddfa_augment
-
+import numba
 
 def parse_param(param):
     """Work for both numpy and tensor"""
@@ -22,7 +22,10 @@ def parse_param(param):
     offset = p_[:, -1].reshape(3, 1)
     alpha_shp = param[12:52].reshape(-1, 1)
     alpha_exp = param[52:].reshape(-1, 1)
-    return p, offset, alpha_shp, alpha_exp
+    return np.ascontiguousarray(p), \
+           np.ascontiguousarray(offset), \
+           np.ascontiguousarray(alpha_shp), \
+           np.ascontiguousarray(alpha_exp)
 
 
 def reconstruct_vertex(param, whitening=True, dense=False, transform=True):
@@ -57,6 +60,19 @@ def reconstruct_vertex(param, whitening=True, dense=False, transform=True):
             vertex[1, :] = std_size + 1 - vertex[1, :]
 
     return vertex
+
+
+@numba.njit()
+def numba_dot(x, y):
+    return x @ y
+
+@numba.njit()
+def compute_68_pts(alpha_shp, alpha_exp):
+    return u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp
+
+@numba.jit()
+def compute_dense(p, alpha_shp, alpha_exp, offset):
+    return u + w_shp @ alpha_shp + w_exp @ alpha_exp
 
 
 def img_loader(path):
@@ -140,7 +156,6 @@ class DDFADataset(data.Dataset):
         return img, target
 
     def __len__(self):
-        return 1
         return len(self.lines)
 
 

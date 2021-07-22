@@ -36,11 +36,13 @@ def hide_face(img, param):
         param = param.numpy()
 
     if np.random.rand() < 0.5:
-        vertex = ddfa.reconstruct_vertex(param)
-        bbox = get_landmarks_wrapbox(vertex[:2].T)
+        # vertex = ddfa.reconstruct_vertex(param.astype(np.float32))
+        # bbox = get_landmarks_wrapbox(vertex[:2].T)
+        size, _, _ = img.shape
+        bbox = [int(size/4), int(size/4), int(3*size/4), int(3*size/4)]
         img = hand_face(img, bbox)
     else:
-        img = crop_range(img)
+        img = crop_range(img, ratio=1/3)
 
     return img
 
@@ -194,8 +196,8 @@ def overlay_transparent(src, overlay, pos, scale=1):
     x, y = pos
 
     #loop over all pixels and apply the blending equation
-    for i in range(h):
-        for j in range(w):
+    for i in numba.prange(h):
+        for j in numba.prange(w):
             if y+i >= rows or x+j >= cols:
                 continue
             alpha = float(overlay[i][j][3]/255.0)*scale # read the alpha channel 
