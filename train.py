@@ -24,6 +24,8 @@ from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
 from utils.visualize import log_training_samples
 import tqdm
+from datetime import datetime
+import os
 # global args (configuration)
 lr = None
 LOSS = 0.
@@ -31,6 +33,8 @@ arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', '
 
 from clearml import Task
 task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Adam-CyclicCosineDecayLR")
+TODAY = datetime.today().strftime('%Y-%m-%d')
+os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
@@ -187,8 +191,11 @@ def validate(val_loader, model, criterion, epoch):
     model.eval()
 
     end = time.time()
+    foo_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+
     with torch.no_grad():
         losses = AverageMeter()
+        foo_losses = AverageMeter()
         top_loss = 0
         for i, (input, target) in enumerate(val_loader):
             # compute output
@@ -198,6 +205,9 @@ def validate(val_loader, model, criterion, epoch):
 
             loss = criterion(output, target)
             losses.update(loss.item(), input.size(0))
+
+            foo_loss = foo_criterion(output, target)
+            foo_losses.update(foo_loss.item(), input.size(0))
 
             if loss.item() >= top_loss:
                 top_loss = loss.item()
@@ -211,8 +221,9 @@ def validate(val_loader, model, criterion, epoch):
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
                      f'Loss {losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
-        writer.add_scalar('Loss/Val', losses.avg, epoch)
-        log_training_samples(input, output, target, writer, epoch, 'Val')
+        writer.add_scalar('WDC_Loss/Val', losses.avg, ITER)
+        writer.add_scalar('WPDC_Loss/Val', foo_losses.avg, ITER)
+        log_training_samples(input, output, target, writer, ITER, 'Val')
 
         # Log top-loss samples.
         input = top_loss_samples['input']
@@ -227,7 +238,7 @@ def validate(val_loader, model, criterion, epoch):
         else:
             if losses.avg <= LOSS:
                 LOSS = losses.avg
-                filename = f'{args.snapshot}_best.pth.tar'
+                filename = f'snapshot/{TODAY}/best.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
@@ -237,7 +248,7 @@ def validate(val_loader, model, criterion, epoch):
                     filename
                 )
             else:
-                filename = f'{args.snapshot}_last.pth.tar'
+                filename = f'snapshot/{TODAY}/last.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
