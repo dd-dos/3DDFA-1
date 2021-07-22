@@ -1,5 +1,6 @@
 import imgaug.augmenters as iaa
 import numpy as np
+from scipy.ndimage.interpolation import rotate
 from .params import *
 import math
 import cv2
@@ -25,7 +26,7 @@ def ddfa_augment(img, param):
    
     if np.random.rand() > 0.5:
         angles = np.linspace(0, 360, num=13)
-        img, param = rotate_vertex(img, param, random.choice(angles))
+        img, param = rotate_samples(img, param, random.choice(angles))
 
     return img, param
 
