@@ -19,6 +19,7 @@ def argparser():
     P.add_argument('--img-path', type=str, default=None, help='path to input image')
     P.add_argument('--save-path', type=str, default=None, help='path to save result')
     P.add_argument('--config_path', type=str, help='config path')
+    P.add_argument('--bfm-fp', type=str, default='configs/bfm_noneck_v3.pkl')
     
     args = P.parse_args()
 
@@ -55,7 +56,8 @@ def test_video(args):
             save_video = False
 
     dense_model = DenseFaceModel(args.model_path,
-                                args.detector_path)
+                                args.detector_path,
+                                args.bfm_fp)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -67,7 +69,8 @@ def test_video(args):
         # frame = cv2.flip(frame, 0)
         key = cv2.waitKey(1) & 0xFF
 
-        processed_frame = dense_model.draw_landmarks(frame)
+        # processed_frame = dense_model.draw_landmarks(frame)
+        processed_frame = dense_model.draw_mesh(frame)
         # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         # logging.info(f'Landmarks detection took {time.time() - time0}')
      

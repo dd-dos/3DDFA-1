@@ -174,7 +174,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
             # Log top-loss samples.
             input = top_loss_samples['input']
             target = top_loss_samples['target']
-            output = top_loss_samples['output']
+            output = top_loss_samples['output'] 
 
             log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train/Top-loss')
 
