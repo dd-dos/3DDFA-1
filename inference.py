@@ -3,7 +3,7 @@ import logging
 import sys
 from pathlib import Path
 import cv2
-from densefacelib.models import DenseFaceModel
+from denseface import DenseFaceModel
 import torch
 import time
 
@@ -69,8 +69,8 @@ def test_video(args):
         # frame = cv2.flip(frame, 0)
         key = cv2.waitKey(1) & 0xFF
 
-        # processed_frame = dense_model.draw_landmarks(frame)
-        processed_frame = dense_model.draw_mesh(frame)
+        processed_frame = dense_model.draw_landmarks(frame)
+        # processed_frame = dense_model.draw_mesh(frame)
         # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         # logging.info(f'Landmarks detection took {time.time() - time0}')
      

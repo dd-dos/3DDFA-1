@@ -37,5 +37,5 @@ runs
 *.zip
 *.pt
 
-densefacelib
 *.png
+test.jpg
