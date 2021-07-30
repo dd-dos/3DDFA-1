@@ -8,7 +8,6 @@ import numpy as np
 import argparse
 import time
 import logging
-import copy
 
 import torch
 import torch.nn as nn
@@ -76,7 +75,7 @@ def parse_args():
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
     parser.add_argument('--resample-num', default=132, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
-    parser.add_argument('--lookahead', type=int, default=5, help='number of lookahead batch')
+    parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
 
     global args
     args = parser.parse_args()
@@ -131,23 +130,37 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
     # Logging after every $(logging_step) iterations
     logging_step = np.ceil(num_samples/(10*args.train_batch_size))
     top_loss = 0
-    meta_train = args.lookahead
     end = time.time()
 
     model.train()
-    vdc_model = model
-    wpdc_model = model.
     for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
         target.requires_grad = False
-        target = target.cuda(non_blocking=True) 
+        target = target.cuda(non_blocking=True)
         output = model(input)
 
         data_time.update(time.time() - end)
 
+        wpdc_loss_value = wpdc_loss(output, target)
+        vdc_loss_value = vdc_loss(output, target)
+        total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+
+        losses.update(total_loss.item(), input.size(0))
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
+
+        if total_loss.item() >= top_loss:
+            top_loss = total_loss.item()
+            top_loss_samples = {
+                'input': input,
+                'target': target,
+                'output': output
+            }
 
         if i%logging_step==logging_step-1:
             logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t' 
@@ -158,6 +171,13 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
             log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
 
+            # Log top-loss samples.
+            input = top_loss_samples['input']
+            target = top_loss_samples['target']
+            output = top_loss_samples['output']
+
+            log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train/Top-loss')
+
         ITER += 1
 
 
@@ -166,11 +186,13 @@ def validate(val_loader, model, criterion, epoch):
     model.eval()
 
     end = time.time()
-    foo_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    vdc_criterion = VDCLoss(opt_style=args.opt_style).cuda()
 
     with torch.no_grad():
+        vdc_losses = AverageMeter()
+        wpdc_losses = AverageMeter()
         losses = AverageMeter()
-        foo_losses = AverageMeter()
         top_loss = 0
         for i, (input, target) in enumerate(val_loader):
             # compute output
@@ -178,11 +200,14 @@ def validate(val_loader, model, criterion, epoch):
             target = target.cuda(non_blocking=True)
             output = model(input)
 
+            loss = vdc_criterion(output, target)
+            vdc_losses.update(loss.item(), input.size(0))
+
+            loss = wpdc_criterion(output, target)
+            wpdc_losses.update(loss.item(), input.size(0))
+
             loss = criterion(output, target)
             losses.update(loss.item(), input.size(0))
-
-            foo_loss = foo_criterion(output, target)
-            foo_losses.update(foo_loss.item(), input.size(0))
 
             if loss.item() >= top_loss:
                 top_loss = loss.item()
@@ -194,11 +219,10 @@ def validate(val_loader, model, criterion, epoch):
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-                     f'Loss {losses.avg:.4f}\t'
+                     f'Loss {vdc_losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
-        writer.add_scalar('VDC_Loss/Val', losses.avg, ITER)
-        writer.add_scalar('WPDC_Loss/Val', foo_losses.avg, ITER)
-        log_training_samples(input, output, target, writer, ITER, 'Val')
+        writer.add_scalar('VDC_Loss/Val', vdc_losses.avg, ITER)
+        writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
 
         # Log top-loss samples.
         input = top_loss_samples['input']
@@ -206,7 +230,7 @@ def validate(val_loader, model, criterion, epoch):
         output = top_loss_samples['output']
 
         log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
-        writer.add_scalar('Top-loss/Val', losses.avg, ITER)
+        writer.add_scalar('Top-loss/Val', top_loss, ITER)
 
         if epoch==0:
             LOSS=losses.avg
@@ -258,8 +282,18 @@ def main():
 
     # step2: optimization: loss and optimization method
     # criterion = nn.MSELoss(size_average=args.size_average).cuda()
-    wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda()
-    vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
+    if args.loss.lower() == 'wpdc':
+        print(args.opt_style)
+        criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+        logging.info('Use WPDC Loss')
+    elif args.loss.lower() == 'vdc':
+        criterion = VDCLoss(opt_style=args.opt_style).cuda()
+        logging.info('Use VDC Loss')
+    elif args.loss.lower() == 'pdc':
+        criterion = nn.MSELoss(size_average=args.size_average).cuda()
+        logging.info('Use PDC loss')
+    else:
+        raise Exception(f'Unknown Loss {args.loss}')
 
     # optimizer = torch.optim.SGD(model.parameters(),
     #                            lr=args.base_lr,
@@ -313,14 +347,16 @@ def main():
     scheduler = CyclicCosineDecayLR(optimizer, 
                                 init_decay_epochs=10,
                                 min_decay_lr=1e-7,
-                                restart_interval = 5,
+                                restart_interval = 3,
                                 restart_lr=1e-5)
     global lr
     lr = args.base_lr
+    wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
+    vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
     for epoch in range(args.epochs):
         # train for one epoch
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
-        validate(val_loader, model, wpdc_loss, epoch)
+        validate(val_loader, model, criterion, epoch)
         scheduler.step()
         lr = scheduler.get_lr()[0]
 
