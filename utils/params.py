@@ -25,6 +25,7 @@ w = np.concatenate((w_shp, w_exp), axis=1)
 w_base = w[keypoints]
 w_norm = np.linalg.norm(w, axis=0)
 w_base_norm = np.linalg.norm(w_base, axis=0)
+tri = _load(osp.join(d, 'tri.pkl')) 
 
 # for inference
 dim = w_shp.shape[0] // 3

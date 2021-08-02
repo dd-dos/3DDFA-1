@@ -1,3 +1,3 @@
-python3 inference.py --mode='video' \
-                 --model-path='snapshot/last.pth.tar' \
-                 --img-path='samples/LFPWFlip_LFPW_image_train_0812_0_13.jpg'
+python3 inference.py --mode='img' \
+                 --model-path='snapshot/2021-07-22/last.pth.tar' \
+                 --img-path='samples/emma_input.jpg'
