@@ -9,7 +9,6 @@ import torch
 import random
 import numba
 import pathlib
-from . import ddfa
 import os
 
 cwd = pathlib.Path(__file__).parent.resolve()
@@ -17,23 +16,30 @@ hand_folder = os.path.join(cwd, 'hand')
 hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
-def ddfa_augment(img, param):
-    if np.random.rand() < 0.5:
-        img = hide_face(img, param)
-
-    if np.random.rand() < 0.95:
-        img = vanilla_aug(image=img)
-   
-    if np.random.rand() > 0.5:
-        angles = np.linspace(0, 360, num=13)
+def ddfa_augment(img, param, full=False):
+    if full:
+        # img = hide_face(img)
+        # img = vanilla_aug(image=img)
+        # angles = np.linspace(0, 360, num=13)
+        angles = [45]
         img, param = rotate_samples(img, param, random.choice(angles))
+    else:
+        if np.random.rand() < 0.5:
+            img = hide_face(img)
 
-    return img, param
+        if np.random.rand() < 0.95:
+            img = vanilla_aug(image=img)
+    
+        if np.random.rand() > 0.5:
+            angles = np.linspace(0, 360, num=13)
+            img, param = rotate_samples(img, param, random.choice(angles))
+
+    return np.ascontiguousarray(img), param
 
 
-def hide_face(img, param):
-    if isinstance(param, torch.Tensor):
-        param = param.numpy()
+def hide_face(img):
+    # if isinstance(param, torch.Tensor):
+    #     param = param.numpy()
 
     if np.random.rand() < 0.5:
         # vertex = ddfa.reconstruct_vertex(param.astype(np.float32))
@@ -66,10 +72,10 @@ vanilla_aug = iaa.OneOf([
     iaa.AdditiveLaplaceNoise(scale=(5, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15), per_channel=True),
     iaa.ChannelShuffle(p=1),
-    iaa.Sequential([
-        iaa.Resize(0.35),
-        iaa.Resize(1/0.35)
-    ]),
+    # iaa.Sequential([
+    #     iaa.Resize(0.35),
+    #     iaa.Resize(1/0.35)
+    # ]),
     # iaa.Sequential([
     #     iaa.Resize(0.25),
     #     iaa.Resize(1/0.25)
@@ -89,8 +95,8 @@ def rotate_vertex(img, param, angle):
     # TODO: jit dis.
     img_height, img_width = img.shape[:2]
 
-    if len(param) == 62:
-        param = param * param_std + param_mean
+    # if len(param) == 62:
+    #     param = param * param_std + param_mean
 
     p_ = param[:12].reshape(3, -1)
     p = p_[:, :3]
@@ -115,7 +121,51 @@ def rotate_vertex(img, param, angle):
 
     new_camera_matrix = np.concatenate((new_p, new_offset), axis=1)
     param[:12] = new_camera_matrix.reshape(12,)
-    param = (param-param_mean) / param_std
+    # param = (param-param_mean) / param_std
+
+    return param
+
+
+from .face3d import face3d
+def n_rotate_vertex(img, param, angle):
+    """
+    Create param for a rotated 3dmm.
+
+    Params:
+    :param: 3dmm parameters.
+            -> np.ndarray.
+    :angle: rotate angle. 
+    """
+    # TODO: jit dis.
+    img_height, img_width = img.shape[:2]
+
+    # if len(param) == 62:
+    #     param = param * param_std + param_mean
+
+    p_ = param[:12].reshape(3, -1)
+    p = p_[:, :3]
+    offset = np.zeros((3,1), dtype=np.float64)
+    offset[:,0] = p_[:, 3]
+    
+    rad_angle = angle / 180 * math.pi
+    rotate_matrix = np.array([
+        [np.cos(rad_angle), -np.sin(rad_angle), 0.],
+        [np.sin(rad_angle), np.cos(rad_angle), 0.],
+        [0., 0., 1.]
+    ])
+
+    center_old = np.array([img_width/2, img_height/2, 1])
+    center_new = rotate_matrix @ center_old
+    rotate_offset = center_old-center_new
+    rotate_offset = rotate_offset.reshape(3,-1)
+
+    # rotated_vertex = rotate_matrix @ vertex + rotate_offset
+    new_p = rotate_matrix @ p.astype(np.float64)
+    new_offset = rotate_matrix @ offset + rotate_offset
+
+    new_camera_matrix = np.concatenate((new_p, new_offset), axis=1)
+    param[:12] = new_camera_matrix.reshape(12,)
+    # param = (param-param_mean) / param_std
 
     return param
 
@@ -124,7 +174,8 @@ def rotate_samples(img, param, angle):
     if isinstance(param, torch.Tensor):
         param = param.numpy()
 
-    r_param = rotate_vertex(img, param, angle)
+    # r_param = rotate_vertex(img, param, angle)
+    r_param = n_rotate_vertex(img, param, angle)
     r_img = ndimage.rotate(img, angle, reshape=False)
 
     return r_img, torch.from_numpy(r_param)
@@ -231,8 +282,10 @@ def crop_range(img,
     def cropWidth(img):
         x_rd = np.random.rand()
         if x_rd > 0.5:
+            # print('x_rd > 0.5')
             img[0:x_crop_length, :, :] = 0.
         else:
+            # print('x_rd <= 0.5')
             img[width-x_crop_length:, :, :] = 0.
 
         return img
@@ -240,18 +293,23 @@ def crop_range(img,
     def cropHeight(img):
         y_rd = np.random.rand()
         if y_rd > 0.5:
+            # print('y_rd > 0.5')
             img[:, 0:y_crop_length, :] = 0.
         else:
+            # print('y_rd <= 0.5')
             img[:, height-y_crop_length:, :] = 0.
 
         return img
 
     rd = np.random.rand()
     if 0.45 > rd >= 0:
+        # print('w')
         img = cropWidth(img)
     elif 0.9 > rd >= 0.45:
+        # print('h')
         img = cropHeight(img)
     else:
+        # print('both')
         img = cropWidth(img)
         img = cropHeight(img)
 
