@@ -6,6 +6,8 @@ import torch.nn as nn
 from math import sqrt
 from utils.io import _numpy_to_cuda
 from utils.params import *
+from utils.face3d.face3d.face_model import FaceModel
+fm = FaceModel()
 
 _to_tensor = _numpy_to_cuda  # gpu
 
@@ -16,8 +18,8 @@ def parse_param_batch(param):
     p_ = param[:, :12].view(N, 3, -1)
     p = p_[:, :, :3]
     offset = p_[:, :, -1].view(N, 3, 1)
-    alpha_shp = param[:, 12:52].view(N, -1, 1)
-    alpha_exp = param[:, 52:].view(N, -1, 1)
+    alpha_shp = param[:, 12:72].view(N, -1, 1)
+    alpha_exp = param[:, 72:].view(N, -1, 1)
     return p, offset, alpha_shp, alpha_exp
 
 
@@ -40,13 +42,15 @@ class WPDCLoss(nn.Module):
         self.resample_num = resample_num
 
     def reconstruct_and_parse(self, input, target):
-        # reconstruct
-        param = input * self.param_std + self.param_mean
-        param_gt = target * self.param_std + self.param_mean
+        # # reconstruct
+        # param = input * self.param_std + self.param_mean
+        # param_gt = target * self.param_std + self.param_mean
 
-        # parse param
-        p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
-        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
+        # # parse param
+        # p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
+        # pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
+        p, offset, alpha_shp, alpha_exp = parse_param_batch(input)
+        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(target)
 
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 
@@ -58,6 +62,7 @@ class WPDCLoss(nn.Module):
             index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
             keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
             keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
+        import ipdb; ipdb.set_trace(context=10)
         w_shp_base = self.w_shp[keypoints_mix]
         u_base = self.u[keypoints_mix]
         w_exp_base = self.w_exp[keypoints_mix]
