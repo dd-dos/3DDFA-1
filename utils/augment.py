@@ -1,7 +1,6 @@
 from utils.face3d.face3d.utils import show_vertices
 import imgaug.augmenters as iaa
 import numpy as np
-from scipy.ndimage.interpolation import rotate
 from .params import *
 import math
 import cv2
@@ -11,8 +10,8 @@ import random
 import numba
 import pathlib
 import os
-from .face3d import face3d
-fm = face3d.face_model.FaceModel()
+# from .face3d import face3d
+# fm = face3d.face_model.FaceModel()
 
 cwd = pathlib.Path(__file__).parent.resolve()
 hand_folder = os.path.join(cwd, 'hand')
@@ -21,11 +20,10 @@ hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
 def ddfa_augment(img, param, full=False):
     if full:
-        # img = hide_face(img)
+        img = hide_face(img)
         # img = vanilla_aug(image=img)
         # angles = np.linspace(0, 360, num=13)
-        angles = [45]
-        img, param = rotate_samples(img, param, random.choice(angles))
+        # img, param = rotate_samples(img, param, random.choice(angles))
     else:
         if np.random.rand() < 0.5:
             img = hide_face(img)
@@ -159,8 +157,6 @@ def n_rotate_vertex(img, param, angle):
     rotate_offset = rotate_offset.reshape(3,)
     
     #################################################
-    r_img = ndimage.rotate(img, -angle, reshape=False)
-
     flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]])
     flip_offset = np.array([0, img_height, 0])
     norm_trans = np.array([img_width/2, img_height/2, 0])
@@ -198,7 +194,7 @@ def rotate_samples(img, param, angle):
 
     # r_param = rotate_vertex(img, param, angle)
     r_param = n_rotate_vertex(img, param, angle)
-    r_img = ndimage.rotate(img, angle, reshape=False)
+    r_img = ndimage.rotate(img, -angle, reshape=False)
 
     return r_img, torch.from_numpy(r_param)
 
@@ -231,7 +227,6 @@ def hand_face(face_img, face_location):
     face_h = face_location[3] - face_location[1]
     face_w = face_location[2] - face_location[0]
 
-    x1, y1, x2, y2 = face_location
     # hand_img = adjust_overlay_color(face_img[y1:y2, x1:x2], hand_img)
 
     area_ratio = random.uniform(1., 1.5)
