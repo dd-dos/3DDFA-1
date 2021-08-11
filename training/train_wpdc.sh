@@ -16,7 +16,7 @@ python3 train.py --arch="mobilenet_1" \
     --warmup=5 \
     --opt-style=resample \
     --resample-num=132 \
-    --train-batch-size=64 \
+    --train-batch-size=8 \
     --base-lr=1e-4 \
     --epochs=9999 \
     --milestones=30,40 \
@@ -25,6 +25,8 @@ python3 train.py --arch="mobilenet_1" \
     --workers=16 \
     --filelists-train="train.configs/train_aug_120x120.list.train" \
     --filelists-val="train.configs/train_aug_120x120.list.val" \
-    --root="train.configs/train_aug_120x120" \
     --log-file="${LOG_FILE}" \
     --resume "snapshot/2021-07-22/best.pth.tar"
+    --train-1 'data/300VW-3D_cropped_3ddfa' \
+    --train-2 'data/300WLP_3ddfa'
+    --val-path 'data/300WLP_3ddfa'
