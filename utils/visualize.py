@@ -20,12 +20,9 @@ def log_training_samples(imgs, preds, gts, writer, id, job):
         pred = preds[idx].cpu().numpy()
         gt = gts[idx].cpu().numpy()
 
-        pred_vertex = fm.reconstruct_vertex(pred)[fm.bfm.kpt_ind]
-        gt_vertex = fm.reconstruct_vertex(gt)[fm.bfm.kpt_ind]
+        pred_pts = fm.reconstruct_vertex(arr_img, pred)[fm.bfm.kpt_ind][:,:2]
+        gt_pts = fm.reconstruct_vertex(arr_img, gt)[fm.bfm.kpt_ind][:,:2]
 
-        pred_pts = pred_vertex[:2].T
-        gt_pts = gt_vertex[:2].T
-        
         for _pts in pred_pts:
             _pts = tuple(_pts.astype(np.uint8))
             cv2.circle(arr_img, _pts, 3, (0,255,0), -1, 10)

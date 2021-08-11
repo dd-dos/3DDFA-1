@@ -29,13 +29,17 @@ class WPDCLoss(nn.Module):
     def __init__(self, opt_style='resample', resample_num=132):
         super(WPDCLoss, self).__init__()
         self.opt_style = opt_style
-        self.param_mean = _to_tensor(param_mean)
-        self.param_std = _to_tensor(param_std)
+        # self.param_mean = _to_tensor(param_mean)
+        # self.param_std = _to_tensor(param_std)
 
-        self.u = _to_tensor(u)
-        self.w_shp = _to_tensor(w_shp)
-        self.w_exp = _to_tensor(w_exp)
-        self.w_norm = _to_tensor(w_norm)
+        # self.u = _to_tensor(u)
+        # self.w_shp = _to_tensor(w_shp)
+        # self.w_exp = _to_tensor(w_exp)
+        # self.w_norm = _to_tensor(w_norm)
+
+        self.u = _to_tensor(fm.bfm.model['shapeMU'])
+        self.w_shp = _to_tensor(fm.bfm.model['shapePC'][:,:60])
+        self.w_exp = _to_tensor(fm.bfm.model['expPC'][:,:29])
 
         self.w_shp_length = self.w_shp.shape[0] // 3
         self.keypoints = _to_tensor(keypoints)
@@ -62,7 +66,6 @@ class WPDCLoss(nn.Module):
             index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
             keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
             keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
-        import ipdb; ipdb.set_trace(context=10)
         w_shp_base = self.w_shp[keypoints_mix]
         u_base = self.u[keypoints_mix]
         w_exp_base = self.w_exp[keypoints_mix]
@@ -73,8 +76,8 @@ class WPDCLoss(nn.Module):
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
-        input = self.param_std * input + self.param_mean
-        target = self.param_std * target + self.param_mean
+        # input = self.param_std * input + self.param_mean
+        # target = self.param_std * target + self.param_mean
 
         N = input.shape[0]
 

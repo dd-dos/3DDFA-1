@@ -28,10 +28,11 @@ class DDFAv2_Dataset(data.Dataset):
     def __getitem__(self, idx):
         img, params = self._generate_face_sample(idx)
 
-        pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
-        face3d.utils.show_pts(img, pts)
+        # pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
+        # face3d.utils.show_pts(img, pts)
 
         img = self.transform(img)
+        params = params.reshape(-1,).astype(np.float32)
 
         return img, params
     

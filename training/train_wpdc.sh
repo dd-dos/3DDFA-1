@@ -8,11 +8,8 @@ LOG_FILE="${LOG_DIR}/${LOG_ALIAS}_`date +'%Y-%m-%d_%H:%M.%S'`.log"
 #echo $LOG_FILE
 
 python3 train.py --arch="mobilenet_1" \
-    --start-epoch=1 \
     --loss=wpdc \
     --snapshot="snapshot/phase1_wpdc" \
-    --param-fp-train='train.configs/param_all_norm.pkl' \
-    --param-fp-val='train.configs/param_all_norm_val.pkl' \
     --warmup=5 \
     --opt-style=resample \
     --resample-num=132 \
@@ -23,10 +20,8 @@ python3 train.py --arch="mobilenet_1" \
     --print-freq=50 \
     --devices-id=0 \
     --workers=16 \
-    --filelists-train="train.configs/train_aug_120x120.list.train" \
-    --filelists-val="train.configs/train_aug_120x120.list.val" \
     --log-file="${LOG_FILE}" \
-    --resume "snapshot/2021-07-22/best.pth.tar"
-    --train-1 'data/300VW-3D_cropped_3ddfa' \
-    --train-2 'data/300WLP_3ddfa'
+    --resume 'snapshot/2021-08-11/last.pth.tar' \
+    --train-one 'data/300VW-3D_cropped_3ddfa' \
+    --train-two 'data/300WLP_3ddfa' \
     --val-path 'data/300WLP_3ddfa'

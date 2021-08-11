@@ -50,9 +50,9 @@ def parse_args():
     parser.add_argument('--print-freq', '-p', default=20, type=int)
     parser.add_argument('--resume', default='', type=str, metavar='PATH')
     parser.add_argument('--devices-id', default='0,1', type=str)
-    parser.add_argument('--train-1', type='str', default='')
-    parser.add_argument('--train-2', type='str', default='')
-    parser.add_argument('--val-path', type='str', default='')
+    parser.add_argument('--train-one', default='', type=str)
+    parser.add_argument('--train-two', default='', type=str)
+    parser.add_argument('--val-path', default='', type=str)
 
     parser.add_argument('--snapshot', default='', type=str)
     parser.add_argument('--log-file', default='output.log', type=str)
@@ -287,40 +287,20 @@ def main():
 
 
     if args.resume:
-        # Fine-tuning using previous model.
-        # only do this once.
-        if args.num_classes > 62:
-            model = getattr(mobilenet_v1, args.arch)(num_classes=62)
-            if Path(args.resume).is_file():
-                logging.info(f'=> loading checkpoint {args.resume}')
-                checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
+        model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+        if Path(args.resume).is_file():
+            logging.info(f'=> loading checkpoint {args.resume}')
+            checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
 
-                model_dict = model.state_dict()
-                # because the model is trained by multiple gpus, prefix module should be removed
-                for k in checkpoint.keys():
-                    model_dict[k.replace('module.', '')] = checkpoint[k]
-                model.load_state_dict(model_dict)
-                for param in model.parameters():
-                    param.requires_grad = False
-                    # Replace the last fully-connected layer
-                    # Parameters of newly constructed modules have requires_grad=True by default
-                in_features = model.fc.in_features
-                model.fc = nn.Linear(in_features, args.num_classes)
-            else:
-                logging.info(f'=> no checkpoint found at {args.resume}')
+            model_dict = model.state_dict()
+            # because the model is trained by multiple gpus, prefix module should be removed
+            for k in checkpoint.keys():
+                model_dict[k.replace('module.', '')] = checkpoint[k]
+            model.load_state_dict(model_dict)
         else:
-            model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
-            if Path(args.resume).is_file():
-                logging.info(f'=> loading checkpoint {args.resume}')
-                checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
-
-                model_dict = model.state_dict()
-                # because the model is trained by multiple gpus, prefix module should be removed
-                for k in checkpoint.keys():
-                    model_dict[k.replace('module.', '')] = checkpoint[k]
-                model.load_state_dict(model_dict)
-            else:
-                logging.info(f'=> no checkpoint found at {args.resume}')
+            logging.info(f'=> no checkpoint found at {args.resume}')
+    else:
+        model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
 
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
@@ -335,13 +315,13 @@ def main():
     normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
 
     train_dataset_1 = DDFAv2_Dataset(
-        root=args.train_1,
+        root=args.train_one,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
         aug=False
     )
 
     train_dataset_2 = DDFAv2_Dataset(
-        root=args.train_2,
+        root=args.train_two,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
         aug=False
     )
@@ -349,7 +329,7 @@ def main():
     concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
     
     val_dataset = DDFAv2_Dataset(
-        root=args.root,
+        root=args.val_path,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
         aug=False
     )
@@ -366,19 +346,14 @@ def main():
 
     scheduler = CyclicCosineDecayLR(optimizer, 
                                 init_decay_epochs=10,
-                                min_decay_lr=1e-7,
+                                min_decay_lr=1e-6,
                                 restart_interval = 3,
-                                restart_lr=1e-5)
+                                restart_lr=1e-4)
     global lr
     lr = args.base_lr
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
     vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
     for epoch in range(args.epochs):
-        # Fine-tuning for 1 epoch.
-        if epoch == 100:
-            for param in model.parameters():
-                param.requires_grad = True
-
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
         validate(val_loader, model, criterion, epoch)
         scheduler.step()

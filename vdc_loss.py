@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from utils.io import _load, _numpy_to_cuda, _numpy_to_tensor
 from utils.params import *
+from utils.face3d.face3d.face_model import FaceModel
+fm = FaceModel()
 
 _to_tensor = _numpy_to_cuda  # gpu
 
@@ -15,8 +17,8 @@ def parse_param_batch(param):
     p_ = param[:, :12].view(N, 3, -1)
     p = p_[:, :, :3]
     offset = p_[:, :, -1].view(N, 3, 1)
-    alpha_shp = param[:, 12:52].view(N, -1, 1)
-    alpha_exp = param[:, 52:].view(N, -1, 1)
+    alpha_shp = param[:, 12:72].view(N, -1, 1)
+    alpha_exp = param[:, 72:].view(N, -1, 1)
     return p, offset, alpha_shp, alpha_exp
 
 
@@ -24,11 +26,15 @@ class VDCLoss(nn.Module):
     def __init__(self, opt_style='all'):
         super(VDCLoss, self).__init__()
 
-        self.u = _to_tensor(u)
-        self.param_mean = _to_tensor(param_mean)
-        self.param_std = _to_tensor(param_std)
-        self.w_shp = _to_tensor(w_shp)
-        self.w_exp = _to_tensor(w_exp)
+        # self.u = _to_tensor(u)
+        # self.param_mean = _to_tensor(param_mean)
+        # self.param_std = _to_tensor(param_std)
+        # self.w_shp = _to_tensor(w_shp)
+        # self.w_exp = _to_tensor(w_exp)
+
+        self.u = _to_tensor(fm.bfm.model['shapeMU'])
+        self.w_shp = _to_tensor(fm.bfm.model['shapePC'][:,:60])
+        self.w_exp = _to_tensor(fm.bfm.model['expPC'][:,:29])
 
         self.keypoints = _to_tensor(keypoints)
         self.u_base = self.u[self.keypoints]
@@ -41,12 +47,12 @@ class VDCLoss(nn.Module):
 
     def reconstruct_and_parse(self, input, target):
         # reconstruct
-        param = input * self.param_std + self.param_mean
-        param_gt = target * self.param_std + self.param_mean
+        # param = input * self.param_std + self.param_mean
+        # param_gt = target * self.param_std + self.param_mean
 
         # parse param
-        p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
-        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
+        p, offset, alpha_shp, alpha_exp = parse_param_batch(input)
+        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(target)
 
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 
