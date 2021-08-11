@@ -22,6 +22,7 @@ class DDFAv2_Dataset(data.Dataset):
         self.aug = aug  
 
     def __len__(self):
+        return 8
         return len(self.file_list)
 
     def __getitem__(self, idx):

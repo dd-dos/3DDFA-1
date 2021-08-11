@@ -33,7 +33,7 @@ LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Adam-CyclicCosineDecayLR")
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR-overfit-test")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument('--devices-id', default='0,1', type=str)
     parser.add_argument('--train-1', type='str', default='')
     parser.add_argument('--train-2', type='str', default='')
+    parser.add_argument('--val-path', type='str', default='')
 
     parser.add_argument('--snapshot', default='', type=str)
     parser.add_argument('--log-file', default='output.log', type=str)
@@ -161,7 +162,8 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
                 'output': output
             }
 
-        if i%logging_step==logging_step-1:
+        # if i%logging_step==logging_step-1:
+        if 1:
             logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t' 
                          f'LR: {lr:8f}\t' 
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
@@ -335,13 +337,13 @@ def main():
     train_dataset_1 = DDFAv2_Dataset(
         root=args.train_1,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
-        aug=True
+        aug=False
     )
 
     train_dataset_2 = DDFAv2_Dataset(
         root=args.train_2,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
-        aug=True
+        aug=False
     )
 
     concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
