@@ -1,3 +1,4 @@
+from utils.face3d.face3d.utils import show_vertices
 import imgaug.augmenters as iaa
 import numpy as np
 from scipy.ndimage.interpolation import rotate
@@ -10,6 +11,8 @@ import random
 import numba
 import pathlib
 import os
+from .face3d import face3d
+fm = face3d.face_model.FaceModel()
 
 cwd = pathlib.Path(__file__).parent.resolve()
 hand_folder = os.path.join(cwd, 'hand')
@@ -82,7 +85,7 @@ vanilla_aug = iaa.OneOf([
     # ]),
 ])
 
-@numba.njit()
+# @numba.njit()
 def rotate_vertex(img, param, angle):
     """
     Create param for a rotated 3dmm.
@@ -136,11 +139,7 @@ def n_rotate_vertex(img, param, angle):
             -> np.ndarray.
     :angle: rotate angle. 
     """
-    # TODO: jit dis.
     img_height, img_width = img.shape[:2]
-
-    # if len(param) == 62:
-    #     param = param * param_std + param_mean
 
     p_ = param[:12].reshape(3, -1)
     p = p_[:, :3]
@@ -153,19 +152,42 @@ def n_rotate_vertex(img, param, angle):
         [np.sin(rad_angle), np.cos(rad_angle), 0.],
         [0., 0., 1.]
     ])
-
+    
     center_old = np.array([img_width/2, img_height/2, 1])
     center_new = rotate_matrix @ center_old
     rotate_offset = center_old-center_new
-    rotate_offset = rotate_offset.reshape(3,-1)
+    rotate_offset = rotate_offset.reshape(3,)
+    
+    #################################################
+    r_img = ndimage.rotate(img, -angle, reshape=False)
 
-    # rotated_vertex = rotate_matrix @ vertex + rotate_offset
-    new_p = rotate_matrix @ p.astype(np.float64)
-    new_offset = rotate_matrix @ offset + rotate_offset
+    flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]])
+    flip_offset = np.array([0, img_height, 0])
+    norm_trans = np.array([img_width/2, img_height/2, 0])
 
-    new_camera_matrix = np.concatenate((new_p, new_offset), axis=1)
-    param[:12] = new_camera_matrix.reshape(12,)
-    # param = (param-param_mean) / param_std
+    # shp = param[12:72].reshape(-1, 1)
+    # exp = param[72:].reshape(-1, 1)
+    # vertex = fm.bfm.reduced_generated_vertices(shp, exp)[fm.bfm.kpt_ind]
+
+    # trans_v = vertex @ p.T + offset.reshape(3,) + norm_trans
+    # flip_v = trans_v @ flip_matrix.T + flip_offset
+    # rot_v = flip_v @ rotate_matrix.T + rotate_offset
+    
+    # new_p = (p.T @ flip_matrix.T @ rotate_matrix.T).T
+    # new_offset = ((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotate_matrix.T + rotate_offset
+    
+    # new_all = vertex @ new_p.T + new_offset
+    #################################################
+    new_p = flip_matrix @ rotate_matrix @ flip_matrix @ p
+    new_offset = (((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotate_matrix.T + rotate_offset - \
+                flip_offset) @ flip_matrix - norm_trans
+
+    new_camera_matrix = np.concatenate((new_p, new_offset.reshape(3,1)), axis=1)
+    param[:12] = new_camera_matrix.reshape(12,1)
+
+    # vertex = fm.reconstruct_vertex(img, param)[fm.bfm.kpt_ind]
+    # face3d.utils.show_pts(r_img, vertex)
+    # import ipdb; ipdb.set_trace(context=10)
 
     return param
 
