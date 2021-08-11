@@ -18,12 +18,12 @@ hand_folder = os.path.join(cwd, 'hand')
 hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
-def ddfa_augment(img, param, full=False):
+def ddfa_augment(img, param, roi_box, full=False):
     if full:
-        img = hide_face(img)
-        # img = vanilla_aug(image=img)
-        # angles = np.linspace(0, 360, num=13)
-        # img, param = rotate_samples(img, param, random.choice(angles))
+        img = hide_face(img, roi_box)
+        img = vanilla_aug(image=img)
+        angles = np.linspace(0, 360, num=13)
+        img, param = rotate_samples(img, param, random.choice(angles))
     else:
         if np.random.rand() < 0.5:
             img = hide_face(img)
@@ -38,16 +38,9 @@ def ddfa_augment(img, param, full=False):
     return np.ascontiguousarray(img), param
 
 
-def hide_face(img):
-    # if isinstance(param, torch.Tensor):
-    #     param = param.numpy()
-
+def hide_face(img, roi_box):
     if np.random.rand() < 0.5:
-        # vertex = ddfa.reconstruct_vertex(param.astype(np.float32))
-        # bbox = get_landmarks_wrapbox(vertex[:2].T)    
-        size, _, _ = img.shape
-        bbox = [int(size/4), int(size/4), int(3*size/4), int(3*size/4)]
-        img = hand_face(img, bbox)
+        img = hand_face(img, roi_box)
     else:
         img = crop_range(img, ratio=1/3)
 
@@ -61,10 +54,6 @@ vanilla_aug = iaa.OneOf([
     iaa.imgcorruptlike.JpegCompression(severity=(3, 5)),	
     iaa.KMeansColorQuantization(n_colors=(80, 100)),	
     iaa.UniformColorQuantization(n_colors=(10, 15)),
-    # iaa.MotionBlur(k=(10, 15), angle=(-45, 45)),
-    # iaa.GaussianBlur((2.0, 5.0)),
-    # iaa.AverageBlur(k=(7, 10)),
-    # iaa.MedianBlur(k=(7, 13)),
     iaa.LinearContrast((1.5, 2)),
     iaa.LogContrast(gain=(0.5, 1.5)),
     iaa.SigmoidContrast(gain=7, cutoff=(0.4, 0.6)),
@@ -73,61 +62,11 @@ vanilla_aug = iaa.OneOf([
     iaa.AdditiveLaplaceNoise(scale=(5, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15), per_channel=True),
     iaa.ChannelShuffle(p=1),
-    # iaa.Sequential([
-    #     iaa.Resize(0.35),
-    #     iaa.Resize(1/0.35)
-    # ]),
-    # iaa.Sequential([
-    #     iaa.Resize(0.25),
-    #     iaa.Resize(1/0.25)
-    # ]),
+    iaa.imgcorruptlike.SpeckleNoise(severity=(1,3))
 ])
 
+
 # @numba.njit()
-def rotate_vertex(img, param, angle):
-    """
-    Create param for a rotated 3dmm.
-
-    Params:
-    :param: 3dmm parameters.
-            -> np.ndarray.
-    :angle: rotate angle. 
-    """
-    # TODO: jit dis.
-    img_height, img_width = img.shape[:2]
-
-    # if len(param) == 62:
-    #     param = param * param_std + param_mean
-
-    p_ = param[:12].reshape(3, -1)
-    p = p_[:, :3]
-    offset = np.zeros((3,1), dtype=np.float64)
-    offset[:,0] = p_[:, 3]
-    
-    rad_angle = angle / 180 * math.pi
-    rotate_matrix = np.array([
-        [np.cos(rad_angle), -np.sin(rad_angle), 0.],
-        [np.sin(rad_angle), np.cos(rad_angle), 0.],
-        [0., 0., 1.]
-    ])
-
-    center_old = np.array([img_width/2, img_height/2, 1])
-    center_new = rotate_matrix @ center_old
-    rotate_offset = center_old-center_new
-    rotate_offset = rotate_offset.reshape(3,-1)
-
-    # rotated_vertex = rotate_matrix @ vertex + rotate_offset
-    new_p = rotate_matrix @ p.astype(np.float64)
-    new_offset = rotate_matrix @ offset + rotate_offset
-
-    new_camera_matrix = np.concatenate((new_p, new_offset), axis=1)
-    param[:12] = new_camera_matrix.reshape(12,)
-    # param = (param-param_mean) / param_std
-
-    return param
-
-
-from .face3d import face3d
 def n_rotate_vertex(img, param, angle):
     """
     Create param for a rotated 3dmm.
@@ -149,17 +88,17 @@ def n_rotate_vertex(img, param, angle):
         [np.cos(rad_angle), -np.sin(rad_angle), 0.],
         [np.sin(rad_angle), np.cos(rad_angle), 0.],
         [0., 0., 1.]
-    ])
+    ], dtype=np.float64)
     
-    center_old = np.array([img_width/2, img_height/2, 1])
+    center_old = np.array([img_width/2, img_height/2, 1], dtype=np.float64)
     center_new = rotate_matrix @ center_old
     rotate_offset = center_old-center_new
     rotate_offset = rotate_offset.reshape(3,)
     
     #################################################
-    flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]])
-    flip_offset = np.array([0, img_height, 0])
-    norm_trans = np.array([img_width/2, img_height/2, 0])
+    flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]], dtype=np.float64)
+    flip_offset = np.array([0, img_height, 0], dtype=np.float64)
+    norm_trans = np.array([img_width/2, img_height/2, 0], dtype=np.float64)
 
     # shp = param[12:72].reshape(-1, 1)
     # exp = param[72:].reshape(-1, 1)
@@ -190,7 +129,9 @@ def n_rotate_vertex(img, param, angle):
 
 def rotate_samples(img, param, angle):
     if isinstance(param, torch.Tensor):
-        param = param.numpy()
+        param = param.numpy().astype(np.float64)
+    else:
+        param = param.astype(np.float64)
 
     # r_param = rotate_vertex(img, param, angle)
     r_param = n_rotate_vertex(img, param, angle)
@@ -229,7 +170,7 @@ def hand_face(face_img, face_location):
 
     # hand_img = adjust_overlay_color(face_img[y1:y2, x1:x2], hand_img)
 
-    area_ratio = random.uniform(1., 1.5)
+    area_ratio = random.uniform(0.8, 1.2)
     hand_area = hand_w*hand_h
     new_hand_area = face_w*face_h*area_ratio
     hand_resize_ratio = np.sqrt(new_hand_area/hand_area)

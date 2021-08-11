@@ -4,7 +4,8 @@ import torchvision
 import numpy as np
 import torch
 import torchvision.transforms as T
-from .ddfa import reconstruct_vertex
+from .face3d import face3d
+fm = face3d.face_model.FaceModel()
 
 @torch.no_grad()
 def log_training_samples(imgs, preds, gts, writer, id, job):
@@ -19,8 +20,8 @@ def log_training_samples(imgs, preds, gts, writer, id, job):
         pred = preds[idx].cpu().numpy()
         gt = gts[idx].cpu().numpy()
 
-        pred_vertex = reconstruct_vertex(pred)
-        gt_vertex = reconstruct_vertex(gt)
+        pred_vertex = fm.reconstruct_vertex(pred)[fm.bfm.kpt_ind]
+        gt_vertex = fm.reconstruct_vertex(gt)[fm.bfm.kpt_ind]
 
         pred_pts = pred_vertex[:2].T
         gt_pts = gt_vertex[:2].T

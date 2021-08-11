@@ -3,7 +3,6 @@
 
 from pathlib import Path
 import numpy as np
-import torch
 import torch.utils.data as data
 import cv2
 from .augment import ddfa_augment
@@ -22,8 +21,14 @@ class DDFAv2_Dataset(data.Dataset):
         self.img_loader = img_loader
         self.aug = aug  
 
+    def __len__(self):
+        return len(self.file_list)
+
     def __getitem__(self, idx):
         img, params = self._generate_face_sample(idx)
+
+        pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
+        face3d.utils.show_pts(img, pts)
 
         img = self.transform(img)
 
@@ -37,16 +42,10 @@ class DDFAv2_Dataset(data.Dataset):
         label = sio.loadmat(label_path)
 
         params = label['params']
-        roi_box = label['roi_box']
+        roi_box = label['roi_box'][0]
 
         if self.aug:
             img, params = ddfa_augment(img, params, roi_box, True)
 
-        # pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
-        # for pt in pts:
-        #     pt = tuple(pt.astype(np.uint8))
-        #     cv2.circle(img, pt, 1, (0,255,0), -1, 10)
-        # cv2.imwrite(f'input_samples/{idx}.jpg', img)
+        return img, params
 
-    def __len__(self):
-        return len(self.file_list)

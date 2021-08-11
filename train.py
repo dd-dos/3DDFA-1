@@ -16,8 +16,9 @@ from torch.utils.data import DataLoader
 import mobilenet_v1
 import torch.backends.cudnn as cudnn
 
-from utils.ddfa import DDFADataset, ToTensorGjz, NormalizeGjz
+from utils.ddfa import ToTensorGjz, NormalizeGjz
 from utils.ddfa import str2bool, AverageMeter
+from utils.ddfa_v2 import DDFAv2_Dataset
 from utils.io import mkdir
 from utils.scheduler import CyclicCosineDecayLR
 from vdc_loss import VDCLoss
@@ -40,7 +41,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
     parser.add_argument('-j', '--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
-    parser.add_argument('--start-epoch', default=1, type=int)
     parser.add_argument('-b', '--train-batch-size', default=128, type=int)
     parser.add_argument('-vb', '--val-batch-size', default=32, type=int)
     parser.add_argument('--base-lr', '--learning-rate', default=0.001, type=float)
@@ -50,16 +50,14 @@ def parse_args():
     parser.add_argument('--print-freq', '-p', default=20, type=int)
     parser.add_argument('--resume', default='', type=str, metavar='PATH')
     parser.add_argument('--devices-id', default='0,1', type=str)
-    parser.add_argument('--filelists-train',
-                        default='', type=str)
-    parser.add_argument('--filelists-val',
-                        default='', type=str)
-    parser.add_argument('--root', default='')
+    parser.add_argument('--train-1', type='str', default='')
+    parser.add_argument('--train-2', type='str', default='')
+
     parser.add_argument('--snapshot', default='', type=str)
     parser.add_argument('--log-file', default='output.log', type=str)
     parser.add_argument('--log-mode', default='w', type=str)
     parser.add_argument('--size-average', default='true', type=str2bool)
-    parser.add_argument('--num-classes', default=62, type=int)
+    parser.add_argument('--num-classes', default=101, type=int, help = '12 pose + 60 shape + 29 expression')
     parser.add_argument('--arch', default='mobilenet_1', type=str,
                         choices=arch_choices)
     parser.add_argument('--frozen', default='false', type=str2bool)
@@ -141,8 +139,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
         data_time.update(time.time() - end)
 
         wpdc_loss_value = wpdc_loss(output, target)
-        vdc_loss_value = vdc_loss(output, target)
-        total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+        # vdc_loss_value = vdc_loss(output, target)
+        # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+        total_loss = wpdc_loss_value
 
         losses.update(total_loss.item(), input.size(0))
         # compute gradient and do SGD step
@@ -168,7 +167,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
                          f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-            log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train')
+            log_training_samples(input, output, target, writer, ITER, 'Train/End-logging-step')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
 
             # Log top-loss samples.
@@ -176,7 +175,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
             target = top_loss_samples['target']
             output = top_loss_samples['output'] 
 
-            log_training_samples(input[:50], output[:50], target[:50], writer, ITER, 'Train/Top-loss')
+            log_training_samples(input, output, target, writer, ITER, 'Train/Top-loss')
 
         ITER += 1
 
@@ -259,7 +258,7 @@ def validate(val_loader, model, criterion, epoch):
 
 
 def main():
-    parse_args()  # parse global argsl
+    parse_args()  
 
     # logging setup
     logging.basicConfig(
@@ -271,17 +270,6 @@ def main():
         ]
     )
 
-    print_args(args)  # print args
-
-    # step1: define the model structure
-    model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
-
-    torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
-    model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
-    # model.to(cuda)
-
-    # step2: optimization: loss and optimization method
-    # criterion = nn.MSELoss(size_average=args.size_average).cuda()
     if args.loss.lower() == 'wpdc':
         print(args.opt_style)
         criterion = WPDCLoss(opt_style=args.opt_style).cuda()
@@ -295,50 +283,80 @@ def main():
     else:
         raise Exception(f'Unknown Loss {args.loss}')
 
+
+    if args.resume:
+        # Fine-tuning using previous model.
+        # only do this once.
+        if args.num_classes > 62:
+            model = getattr(mobilenet_v1, args.arch)(num_classes=62)
+            if Path(args.resume).is_file():
+                logging.info(f'=> loading checkpoint {args.resume}')
+                checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
+
+                model_dict = model.state_dict()
+                # because the model is trained by multiple gpus, prefix module should be removed
+                for k in checkpoint.keys():
+                    model_dict[k.replace('module.', '')] = checkpoint[k]
+                model.load_state_dict(model_dict)
+                for param in model.parameters():
+                    param.requires_grad = False
+                    # Replace the last fully-connected layer
+                    # Parameters of newly constructed modules have requires_grad=True by default
+                in_features = model.fc.in_features
+                model.fc = nn.Linear(in_features, args.num_classes)
+            else:
+                logging.info(f'=> no checkpoint found at {args.resume}')
+        else:
+            model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+            if Path(args.resume).is_file():
+                logging.info(f'=> loading checkpoint {args.resume}')
+                checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
+
+                model_dict = model.state_dict()
+                # because the model is trained by multiple gpus, prefix module should be removed
+                for k in checkpoint.keys():
+                    model_dict[k.replace('module.', '')] = checkpoint[k]
+                model.load_state_dict(model_dict)
+            else:
+                logging.info(f'=> no checkpoint found at {args.resume}')
+
+    torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
+    model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
     # optimizer = torch.optim.SGD(model.parameters(),
     #                            lr=args.base_lr,
     #                           momentum=args.momentum,
     #                          weight_decay=args.weight_decay,
     #                         nesterov=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
-    # step 2.1 resume
-    if args.resume:
-        if Path(args.resume).is_file():
-            logging.info(f'=> loading checkpoint {args.resume}')
-
-            checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
-            # checkpoint = torch.load(args.resume)['state_dict']
-            model.load_state_dict(checkpoint)
-
-        else:
-            logging.info(f'=> no checkpoint found at {args.resume}')
-
-    # step3: data
     normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
 
-    train_dataset = DDFADataset(
-        root=args.root,
-        filelists=args.filelists_train,
-        param_fp=args.param_fp_train,
+    train_dataset_1 = DDFAv2_Dataset(
+        root=args.train_1,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
         aug=True
     )
+
+    train_dataset_2 = DDFAv2_Dataset(
+        root=args.train_2,
+        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        aug=True
+    )
+
+    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
     
-    val_dataset = DDFADataset(
+    val_dataset = DDFAv2_Dataset(
         root=args.root,
-        filelists=args.filelists_val,
-        param_fp=args.param_fp_val,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
         aug=False
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
+    train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=False)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 
-    # step4: run
     cudnn.benchmark = True
     # if args.test_initial:
     #     logging.info('Testing from initial')
@@ -354,7 +372,11 @@ def main():
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
     vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
     for epoch in range(args.epochs):
-        # train for one epoch
+        # Fine-tuning for 1 epoch.
+        if epoch == 100:
+            for param in model.parameters():
+                param.requires_grad = True
+
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
         validate(val_loader, model, criterion, epoch)
         scheduler.step()

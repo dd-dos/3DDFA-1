@@ -13,7 +13,7 @@ if __name__=='__main__':
     shutil.rmtree('input_samples', ignore_errors=True)
     os.makedirs('input_samples', exist_ok=True)
     dataset = DDFAv2_Dataset(
-        'data/300VW-3D_cropped_3ddfa',
+        'data/300WLP_3ddfa',
         transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
     )
 
