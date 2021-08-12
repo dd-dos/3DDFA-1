@@ -7,8 +7,12 @@ import torch
 import torchvision
 from .utils import ddfa, estimate_pose, imutils
 from .utils.memory import empty_cache_memory
+from utils.face3d import face3d
+fm = face3d.face_model.FaceModel()
+from utils.face3d.face3d.utils import *
 
 from . import mobilenet_v1
+
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -19,7 +23,8 @@ class FaceAlignment:
                  device='cuda',
                  max_batch_size=8,
                  expand_ratio=1.2,
-                 input_size=120):
+                 input_size=120,
+                 num_classes=62):
         """
         Main class for processing dense face.
 
@@ -34,7 +39,7 @@ class FaceAlignment:
         :expand_ratio: ratio to expand image.
         :input_size: input image size.
         """
-        self.dense_face_model = mobilenet_v1.mobilenet_1()
+        self.dense_face_model = mobilenet_v1.mobilenet_1(num_classes=num_classes)
         checkpoint = torch.load(model_path, map_location=device)['state_dict']
         model_dict = self.dense_face_model.state_dict()
         for k in checkpoint.keys():
@@ -90,13 +95,19 @@ class FaceAlignment:
         for idx, det in enumerate(detected_faces):
             cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=1.2)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
-            
+            # ori_inp = inp.copy()
+            # cv2.imwrite('inp.jpg', ori_inp)
             inp = self.transformer(inp)
             inp = inp.to(self.device)
             inp.unsqueeze_(0)
 
             out = self.dense_face_model(inp).squeeze(0)
-            params_list.append(out.numpy())
+            # import ipdb; ipdb.set_trace(context=10)
+            # vertex = fm.reconstruct_vertex(ori_inp, out.numpy())[fm.bfm.kpt_ind]
+            # show_pts(ori_inp, vertex[:,:2])
+            # import ipdb; ipdb.set_trace(context=10)
+
+            params_list.append(out.numpy().reshape(-1,))
             extra_list.append(
                 {
                     'length': length,
@@ -183,6 +194,7 @@ class FaceAlignment:
 
         return params_batch.numpy(), extra_list
 
+    @torch.no_grad()
     def draw_landmarks(self, img, detected_faces):
         """
         Draw landmarks to image.
@@ -281,14 +293,14 @@ class FaceAlignment:
             'rotation_angles': angles_list,
         }
 
-        for idx in range(len(detected_faces_list)):
-            pts = landmarks_list[idx][:, :2]
-            img = image_or_path_list[idx]
+        # for idx in range(len(detected_faces_list)):
+        #     pts = landmarks_list[idx][:, :2]
+        #     img = image_or_path_list[idx]
             
-            for _pts in pts:
-                cv2.circle(img, _pts.astype(int), 3, (0,255,0), -1, 10)
+        #     for _pts in pts:
+        #         cv2.circle(img, _pts.astype(int), 3, (0,255,0), -1, 10)
 
-            cv2.imwrite(f'samples/{idx}.jpg', img)
+        #     cv2.imwrite(f'samples/{idx}.jpg', img)
 
         return meta
 
@@ -345,7 +357,7 @@ class FaceAlignment:
         """
         if detected_faces is None or len(detected_faces) == 0:
             logging.warn("No faces were detected.")
-            return None
+            return 
         
         params_list, extra_list = self.get_3dmm_params(image_or_path, detected_faces)
         landmarks = []
@@ -355,7 +367,8 @@ class FaceAlignment:
             length = extra_list[idx]['length']
             pad = extra_list[idx]['pad']
 
-            vertex = ddfa.reconstruct_vertex(params)
+            # vertex = ddfa.reconstruct_vertex(params)
+            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind].T
 
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
@@ -398,6 +411,8 @@ class FaceAlignment:
             length = extra[idx]['length']
             pad = extra[idx]['pad']
 
+            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind]
+
             pts_img = imutils.cropped_to_orginal(
                 vertex, length, center, self.input_size
             )
@@ -438,10 +453,14 @@ class FaceAlignment:
             length = extra_list[idx]['length']
             pad = extra_list[idx]['pad']
 
-            vertex = ddfa.reconstruct_vertex(params)
+            if self.input_size == 256:
+                vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind][:,:2].T
+            else:
+                vertex = ddfa.reconstruct_vertex(params)
+
             # from face3d import face_model
             # fm = face_model.FaceModel('examples/Data/BFM/Out/BFM.mat')
-            # vertex = fm.reconstruct_vertex(np.zeros((120,120,3)), params)
+            # vertex = fm.reconstruct_vertex(np.zeros((120,120,3)), params)[fm.bfm.kpt_ind]
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
             # De-pad
@@ -493,7 +512,8 @@ class FaceAlignment:
             length = extra['length']
             pad = extra['pad']
 
-            vertex = ddfa.reconstruct_vertex(params)
+            # vertex = ddfa.reconstruct_vertex(params)
+            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind]
 
             pts_img = imutils.cropped_to_orginal(
                 vertex, length, center, self.input_size

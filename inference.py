@@ -3,9 +3,11 @@ import logging
 import sys
 from pathlib import Path
 import cv2
-from denseface import DenseFaceModel
+from tddfa.denseface import FaceAlignment
 import torch
 import time
+import torch
+import torchvision
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -25,7 +27,7 @@ def argparser():
 
     return args
 
-
+@torch.no_grad()
 def test_video(args):
     """
     Detect 68 landmarks of a video. If no video is specified, 
@@ -55,9 +57,10 @@ def test_video(args):
             logging.error(f'Invalid save path: {path}.')
             save_video = False
 
-    dense_model = DenseFaceModel(args.model_path,
-                                args.detector_path,
-                                args.bfm_fp)
+    face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
+
+
+    dense_model = FaceAlignment(args.model_path, input_size=256, device='cpu', num_classes=101)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -66,10 +69,16 @@ def test_video(args):
         if not ret:
             break
         
+        detected_faces = face_detector.forward(torch.tensor(frame))[0]
+        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
         # frame = cv2.flip(frame, 0)
         key = cv2.waitKey(1) & 0xFF
 
-        processed_frame = dense_model.draw_landmarks(frame)
+        try:
+            processed_frame = dense_model.draw_landmarks(frame, detected_faces)
+        except Exception as e:
+            print(e)
+            processed_frame = frame
         # processed_frame = dense_model.draw_mesh(frame)
         # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         # logging.info(f'Landmarks detection took {time.time() - time0}')
@@ -92,7 +101,7 @@ def test_video(args):
     print("The video was successfully saved")
 
 def test_image(args):
-    dense_model = DenseFaceModel(args.model_path,
+    dense_model = FaceAlignment(args.model_path,
                                 args.detector_path)
     img = cv2.imread(args.img_path)
     processed_frame = dense_model.draw_landmarks(args.img_path, detected_faces=torch.tensor([[0,0,img.shape[0], img.shape[0]]]))

@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torchmetrics
 import torchvision.transforms as T
-from .params import params_mean_101, params_std_101
 from .face3d import face3d
 from .ddfa import AverageMeter
 
@@ -24,11 +23,8 @@ def log_training_samples(imgs, preds, gts, writer, id, job):
         pred = preds[idx].cpu().numpy().reshape(-1,)
         gt = gts[idx].cpu().numpy().reshape(-1,)
 
-        transformed_pred = pred * params_std_101 + params_mean_101
-        transformed_gt = gt * params_std_101 + params_mean_101
-
-        pred_pts = fm.reconstruct_vertex(arr_img, transformed_pred)[fm.bfm.kpt_ind][:,:2]
-        gt_pts = fm.reconstruct_vertex(arr_img, transformed_gt)[fm.bfm.kpt_ind][:,:2]
+        pred_pts = fm.reconstruct_vertex(arr_img, pred)[fm.bfm.kpt_ind][:,:2]
+        gt_pts = fm.reconstruct_vertex(arr_img, gt)[fm.bfm.kpt_ind][:,:2]
 
         for _pts in pred_pts:
             _pts = tuple(_pts.astype(np.uint8))
