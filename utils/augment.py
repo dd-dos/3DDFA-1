@@ -26,7 +26,7 @@ def ddfa_augment(img, param, roi_box, full=False):
         img, param = rotate_samples(img, param, random.choice(angles))
     else:
         if np.random.rand() < 0.5:
-            img = hide_face(img)
+            img = hide_face(img, roi_box)
 
         if np.random.rand() < 0.95:
             img = vanilla_aug(image=img)
@@ -66,7 +66,7 @@ vanilla_aug = iaa.OneOf([
 ])
 
 
-# @numba.njit()
+@numba.njit()
 def n_rotate_vertex(img, param, angle):
     """
     Create param for a rotated 3dmm.
@@ -82,6 +82,9 @@ def n_rotate_vertex(img, param, angle):
     p = p_[:, :3]
     offset = np.zeros((3,1), dtype=np.float64)
     offset[:,0] = p_[:, 3]
+
+    p = np.ascontiguousarray(p)
+    offset = np.ascontiguousarray(offset)
     
     rad_angle = angle / 180 * math.pi
     rotate_matrix = np.array([
@@ -137,7 +140,7 @@ def rotate_samples(img, param, angle):
     r_param = n_rotate_vertex(img, param, angle)
     r_img = ndimage.rotate(img, -angle, reshape=False)
 
-    return r_img, torch.from_numpy(r_param)
+    return r_img, r_param
 
 
 def angle2rotmat(angle):

@@ -23,7 +23,7 @@ from utils.io import mkdir
 from utils.scheduler import CyclicCosineDecayLR
 from vdc_loss import VDCLoss
 from wpdc_loss import WPDCLoss
-from utils.visualize import log_training_samples
+from utils.visualize import log_training_samples, RandomBullShit
 import tqdm
 from datetime import datetime
 import os
@@ -33,7 +33,7 @@ LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR-overfit-test")
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
@@ -123,6 +123,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
+    random_bullshit = RandomBullShit()
 
     num_samples = train_loader.dataset.__len__()
 
@@ -140,12 +141,14 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
         data_time.update(time.time() - end)
 
         wpdc_loss_value = wpdc_loss(output, target)
-        # vdc_loss_value = vdc_loss(output, target)
-        # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+        vdc_loss_value = vdc_loss(output, target)
+        total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
         total_loss = wpdc_loss_value
 
+        random_bullshit.update(output.cuda(), target)
+
         losses.update(total_loss.item(), input.size(0))
-        # compute gradient and do SGD step
+
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
@@ -162,27 +165,27 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
                 'output': output
             }
 
-        # if i%logging_step==logging_step-1:
-        if 1:
+        if i%logging_step==logging_step-1:
             logging.info(f'Epoch: [{epoch}][{i}/{len(train_loader)}]\t' 
                          f'LR: {lr:8f}\t' 
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
                          f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-            log_training_samples(input, output, target, writer, ITER, 'Train/End-logging-step')
+            log_training_samples(input[:32], output[:32], target[:32], writer, ITER, 'Train/End-logging-step')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
+            random_bullshit.go(writer, ITER, 'Train')
 
             # Log top-loss samples.
             input = top_loss_samples['input']
             target = top_loss_samples['target']
             output = top_loss_samples['output'] 
 
-            log_training_samples(input, output, target, writer, ITER, 'Train/Top-loss')
+            log_training_samples(input[:32], output[:32], target[:32], writer, ITER, 'Train/Top-loss')
 
         ITER += 1
 
 
-def validate(val_loader, model, criterion, epoch):
+def validate(val_loader, model, epoch, criterion='wpdc'):
     global LOSS
     model.eval()
 
@@ -194,6 +197,7 @@ def validate(val_loader, model, criterion, epoch):
         vdc_losses = AverageMeter()
         wpdc_losses = AverageMeter()
         losses = AverageMeter()
+        random_bullshit = RandomBullShit()
         top_loss = 0
         for i, (input, target) in enumerate(val_loader):
             # compute output
@@ -201,29 +205,40 @@ def validate(val_loader, model, criterion, epoch):
             target = target.cuda(non_blocking=True)
             output = model(input)
 
-            loss = vdc_criterion(output, target)
-            vdc_losses.update(loss.item(), input.size(0))
+            vdc_loss = vdc_criterion(output, target)
+            vdc_losses.update(vdc_loss.item(), input.size(0))
 
-            loss = wpdc_criterion(output, target)
-            wpdc_losses.update(loss.item(), input.size(0))
+            wpdc_loss = wpdc_criterion(output, target)
+            wpdc_losses.update(wpdc_loss.item(), input.size(0))
 
-            loss = criterion(output, target)
-            losses.update(loss.item(), input.size(0))
+            random_bullshit.update(output.cuda(), target)
 
-            if loss.item() >= top_loss:
-                top_loss = loss.item()
-                top_loss_samples = {
-                    'input': input,
-                    'target': target,
-                    'output': output
-                }
+            if args.loss.lower() == 'wpdc':
+                if wpdc_loss.item() >= top_loss:
+                    top_loss = wpdc_loss.item()
+                    top_loss_samples = {
+                        'input': input,
+                        'target': target,
+                        'output': output
+                    }
+            else:
+                if vdc_loss.item() >= top_loss:
+                    top_loss = vdc_loss.item()
+                    top_loss_samples = {
+                        'input': input,
+                        'target': target,
+                        'output': output
+                    }
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
-                     f'Loss {vdc_losses.avg:.4f}\t'
+                     f'VDCLoss {vdc_losses.avg:.4f}\t'
+                     f'WPDCLoss {wpdc_losses.avg:.4f}\t'
                      f'Time {elapse:.3f}')
         writer.add_scalar('VDC_Loss/Val', vdc_losses.avg, ITER)
         writer.add_scalar('WPDC_Loss/Val', wpdc_losses.avg, ITER)
+
+        random_bullshit.go(writer, ITER, 'Val')
 
         # Log top-loss samples.
         input = top_loss_samples['input']
@@ -273,7 +288,6 @@ def main():
     )
 
     if args.loss.lower() == 'wpdc':
-        print(args.opt_style)
         criterion = WPDCLoss(opt_style=args.opt_style).cuda()
         logging.info('Use WPDC Loss')
     elif args.loss.lower() == 'vdc':
@@ -305,25 +319,19 @@ def main():
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
-    # optimizer = torch.optim.SGD(model.parameters(),
-    #                            lr=args.base_lr,
-    #                           momentum=args.momentum,
-    #                          weight_decay=args.weight_decay,
-    #                         nesterov=True)
 
     normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
 
     train_dataset_1 = DDFAv2_Dataset(
         root=args.train_one,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
-        aug=False
+        aug=True
     )
 
     train_dataset_2 = DDFAv2_Dataset(
         root=args.train_two,
         transform=transforms.Compose([ToTensorGjz(), normalize]),
-        aug=False
+        aug=True
     )
 
     concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
@@ -335,7 +343,7 @@ def main():
     )
 
     train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
-                              shuffle=True, pin_memory=True, drop_last=False)
+                              shuffle=True, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 
@@ -344,18 +352,39 @@ def main():
     #     logging.info('Testing from initial')
     #     validate(val_loader, model, criterion, args.start_epoch)
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
+    # optimizer = torch.optim.SGD(model.parameters(),
+    #                            lr=args.base_lr,
+    #                           momentum=args.momentum,
+    #                          weight_decay=args.weight_decay,
+    #                         nesterov=True)
+
+    '''
+    First training.
+    Use only WPDC loss.
+    '''
+    # scheduler = CyclicCosineDecayLR(optimizer, 
+    #                             init_decay_epochs=10,
+    #                             min_decay_lr=1e-6,
+    #                             restart_interval = 3,
+    #                             restart_lr=1e-4)
+
+    '''
+    Second training.
+    Use both WPDC and VDC loss.
+    '''
     scheduler = CyclicCosineDecayLR(optimizer, 
-                                init_decay_epochs=10,
-                                min_decay_lr=1e-6,
-                                restart_interval = 3,
-                                restart_lr=1e-4)
+                            init_decay_epochs=5,
+                            min_decay_lr=1e-7,
+                            restart_interval = 3,
+                            restart_lr=1e-5)
     global lr
     lr = args.base_lr
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
     vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
     for epoch in range(args.epochs):
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
-        validate(val_loader, model, criterion, epoch)
+        validate(val_loader, model, epoch, criterion='wpdc')
         scheduler.step()
         lr = scheduler.get_lr()[0]
 

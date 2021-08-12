@@ -29,8 +29,8 @@ class WPDCLoss(nn.Module):
     def __init__(self, opt_style='resample', resample_num=132):
         super(WPDCLoss, self).__init__()
         self.opt_style = opt_style
-        # self.param_mean = _to_tensor(param_mean)
-        # self.param_std = _to_tensor(param_std)
+        self.param_mean = _to_tensor(params_mean_101)
+        self.param_std = _to_tensor(params_std_101)
 
         # self.u = _to_tensor(u)
         # self.w_shp = _to_tensor(w_shp)
@@ -47,14 +47,12 @@ class WPDCLoss(nn.Module):
 
     def reconstruct_and_parse(self, input, target):
         # # reconstruct
-        # param = input * self.param_std + self.param_mean
-        # param_gt = target * self.param_std + self.param_mean
+        param = input * self.param_std + self.param_mean
+        param_gt = target * self.param_std + self.param_mean
 
         # # parse param
-        # p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
-        # pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
-        p, offset, alpha_shp, alpha_exp = parse_param_batch(input)
-        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(target)
+        p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
+        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
 
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 
@@ -76,8 +74,8 @@ class WPDCLoss(nn.Module):
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
-        # input = self.param_std * input + self.param_mean
-        # target = self.param_std * target + self.param_mean
+        input = self.param_std * input + self.param_mean
+        target = self.param_std * target + self.param_mean
 
         N = input.shape[0]
 

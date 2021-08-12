@@ -27,8 +27,8 @@ class VDCLoss(nn.Module):
         super(VDCLoss, self).__init__()
 
         # self.u = _to_tensor(u)
-        # self.param_mean = _to_tensor(param_mean)
-        # self.param_std = _to_tensor(param_std)
+        self.param_mean = _to_tensor(params_mean_101)
+        self.param_std = _to_tensor(params_std_101)
         # self.w_shp = _to_tensor(w_shp)
         # self.w_exp = _to_tensor(w_exp)
 
@@ -47,12 +47,12 @@ class VDCLoss(nn.Module):
 
     def reconstruct_and_parse(self, input, target):
         # reconstruct
-        # param = input * self.param_std + self.param_mean
-        # param_gt = target * self.param_std + self.param_mean
+        param = input * self.param_std + self.param_mean
+        param_gt = target * self.param_std + self.param_mean
 
         # parse param
-        p, offset, alpha_shp, alpha_exp = parse_param_batch(input)
-        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(target)
+        p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
+        pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
 
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 

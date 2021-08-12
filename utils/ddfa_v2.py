@@ -8,6 +8,8 @@ import cv2
 from .augment import ddfa_augment
 from .face3d import face3d
 import scipy.io as sio
+from .params import params_mean_101, params_std_101
+import numba
 fm = face3d.face_model.FaceModel()
 
 def img_loader(path):
@@ -19,10 +21,9 @@ class DDFAv2_Dataset(data.Dataset):
         self.transform = transform
         self.file_list = list(Path(root).glob('**/*.jpg'))
         self.img_loader = img_loader
-        self.aug = aug  
+        self.aug = aug
 
     def __len__(self):
-        return 8
         return len(self.file_list)
 
     def __getitem__(self, idx):
@@ -32,7 +33,7 @@ class DDFAv2_Dataset(data.Dataset):
         # face3d.utils.show_pts(img, pts)
 
         img = self.transform(img)
-        params = params.reshape(-1,).astype(np.float32)
+        params = self._transform_params(params)
 
         return img, params
     
@@ -47,7 +48,12 @@ class DDFAv2_Dataset(data.Dataset):
         roi_box = label['roi_box'][0]
 
         if self.aug:
-            img, params = ddfa_augment(img, params, roi_box, True)
+            img, params = ddfa_augment(img, params, roi_box, False)
 
         return img, params
 
+    def _transform_params(self, params):
+        t_params = params.reshape(-1,).astype(np.float32)
+        t_params = (t_params - params_mean_101) / params_std_101
+
+        return t_params
