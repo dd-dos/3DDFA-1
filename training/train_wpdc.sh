@@ -19,10 +19,11 @@ python3 train.py --arch="mobilenet_1" \
     --epochs=9999 \
     --milestones=30,40 \
     --print-freq=50 \
-    --devices-id=0 \
+    --devices-id=0,1 \
     --workers=12 \
     --log-file="${LOG_FILE}" \
-    --resume 'snapshot/2021-08-11/last.pth.tar' \
+    --resume 'snapshot/2021-08-12/best.pth.tar' \
     --train-one 'data/300VW-3D_cropped_3ddfa' \
     --train-two 'data/300WLP_3ddfa' \
-    --val-path 'data/AFLW2000_3ddfa'
+    --val-path 'data/AFLW2000_3ddfa' \
+    --use-amp

@@ -82,7 +82,8 @@ class WPDCLoss(nn.Module):
         offset[:, -1] = offsetg[:, -1]
 
         weights = torch.zeros_like(input, dtype=torch.float)
-        tmpv = (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg).view(N, -1, 3).permute(0, 2, 1)
+        with torch.cuda.amp.autocast(enabled=False):
+            tmpv = (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg).view(N, -1, 3).permute(0, 2, 1)
 
         tmpv_norm = torch.norm(tmpv, dim=2)
         offset_norm = sqrt(w_shp_base.shape[0] // 3)

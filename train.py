@@ -75,6 +75,7 @@ def parse_args():
     parser.add_argument('--resample-num', default=132, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
     parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
+    parser.add_argument('--use-amp', action='store_true')
 
     global args
     args = parser.parse_args()
@@ -92,39 +93,18 @@ def print_args(args):
         logging.info(s)
 
 
-def adjust_learning_rate(optimizer, epoch, milestones=None):
-    """Sets the learning rate: milestone is a list/tuple"""
-
-    def to(epoch):
-        if epoch <= args.warmup:
-            return 1
-        elif args.warmup < epoch <= milestones[0]:
-            return 0
-        for i in range(1, len(milestones)):
-            if milestones[i - 1] < epoch <= milestones[i]:
-                return i
-        return len(milestones)
-
-    n = to(epoch)
-
-    global lr
-    lr = args.base_lr * (0.2 ** n)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     # logging.info(f'Save checkpoint to {filename}')
 
 ITER = 0
-def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
+def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
     global ITER
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
     random_bullshit = RandomBullShit()
-
+    use_amp = args.use_amp
     num_samples = train_loader.dataset.__len__()
 
     # Logging after every $(logging_step) iterations
@@ -134,24 +114,30 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
 
     model.train()
     for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
-        target.requires_grad = False
-        target = target.cuda(non_blocking=True)
-        output = model(input)
+        optimizer.zero_grad()
+        
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            target.requires_grad = False
+            target = target.cuda(non_blocking=True)
+            
+            output = model(input)
+            
+            data_time.update(time.time() - end)
+            # import ipdb; ipdb.set_trace(context=10)
+            wpdc_loss_value = wpdc_loss(output, target)
+            vdc_loss_value = vdc_loss(output, target)
+            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            losses.update(total_loss)
 
-        data_time.update(time.time() - end)
-
-        wpdc_loss_value = wpdc_loss(output, target)
-        vdc_loss_value = vdc_loss(output, target)
-        total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
-        total_loss = wpdc_loss_value
+            if use_amp:
+                scaler.scale(total_loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                total_loss.backward()
+                optimizer.step()
 
         random_bullshit.update(output.cuda(), target)
-
-        losses.update(total_loss.item(), input.size(0))
-
-        optimizer.zero_grad()
-        total_loss.backward()
-        optimizer.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -188,7 +174,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch):
 def validate(val_loader, model, epoch, criterion='wpdc'):
     global LOSS
     model.eval()
-
+    use_amp = args.use_amp
     end = time.time()
     wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
     vdc_criterion = VDCLoss(opt_style=args.opt_style).cuda()
@@ -199,36 +185,37 @@ def validate(val_loader, model, epoch, criterion='wpdc'):
         losses = AverageMeter()
         random_bullshit = RandomBullShit()
         top_loss = 0
-        for i, (input, target) in enumerate(val_loader):
-            # compute output
-            target.requires_grad = False
-            target = target.cuda(non_blocking=True)
-            output = model(input)
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            for i, (input, target) in enumerate(val_loader):
+                # compute output
+                target.requires_grad = False
+                target = target.cuda(non_blocking=True)
+                output = model(input)
 
-            vdc_loss = vdc_criterion(output, target)
-            vdc_losses.update(vdc_loss.item(), input.size(0))
+                vdc_loss = vdc_criterion(output, target)
+                vdc_losses.update(vdc_loss.item(), input.size(0))
 
-            wpdc_loss = wpdc_criterion(output, target)
-            wpdc_losses.update(wpdc_loss.item(), input.size(0))
+                wpdc_loss = wpdc_criterion(output, target)
+                wpdc_losses.update(wpdc_loss.item(), input.size(0))
 
-            random_bullshit.update(output.cuda(), target)
+                random_bullshit.update(output.cuda(), target)
 
-            if args.loss.lower() == 'wpdc':
-                if wpdc_loss.item() >= top_loss:
-                    top_loss = wpdc_loss.item()
-                    top_loss_samples = {
-                        'input': input,
-                        'target': target,
-                        'output': output
-                    }
-            else:
-                if vdc_loss.item() >= top_loss:
-                    top_loss = vdc_loss.item()
-                    top_loss_samples = {
-                        'input': input,
-                        'target': target,
-                        'output': output
-                    }
+                if args.loss.lower() == 'wpdc':
+                    if wpdc_loss.item() >= top_loss:
+                        top_loss = wpdc_loss.item()
+                        top_loss_samples = {
+                            'input': input,
+                            'target': target,
+                            'output': output
+                        }
+                else:
+                    if vdc_loss.item() >= top_loss:
+                        top_loss = vdc_loss.item()
+                        top_loss_samples = {
+                            'input': input,
+                            'target': target,
+                            'output': output
+                        }
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
@@ -247,6 +234,10 @@ def validate(val_loader, model, epoch, criterion='wpdc'):
 
         log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
         writer.add_scalar('Top-loss/Val', top_loss, ITER)
+
+        losses = vdc_losses
+        if args.loss.lower() == 'wpdc':
+            losses = wpdc_losses
 
         if epoch==0:
             LOSS=losses.avg
@@ -319,7 +310,6 @@ def main():
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
 
-
     normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
 
     train_dataset_1 = DDFAv2_Dataset(
@@ -352,12 +342,12 @@ def main():
     #     logging.info('Testing from initial')
     #     validate(val_loader, model, criterion, args.start_epoch)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
-    # optimizer = torch.optim.SGD(model.parameters(),
-    #                            lr=args.base_lr,
-    #                           momentum=args.momentum,
-    #                          weight_decay=args.weight_decay,
-    #                         nesterov=True)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
+    optimizer = torch.optim.SGD(model.parameters(),
+                               lr=args.base_lr,
+                              momentum=args.momentum,
+                             weight_decay=args.weight_decay,
+                            nesterov=True)
 
     '''
     First training.
@@ -372,18 +362,22 @@ def main():
     '''
     Second training.
     Use both WPDC and VDC loss.
+    Switch to SGD.
     '''
     scheduler = CyclicCosineDecayLR(optimizer, 
                             init_decay_epochs=5,
                             min_decay_lr=1e-7,
                             restart_interval = 3,
-                            restart_lr=1e-5)
+                            restart_lr=1e-4)
     global lr
     lr = args.base_lr
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
     vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
+
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
+
     for epoch in range(args.epochs):
-        train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch)
+        train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler)
         validate(val_loader, model, epoch, criterion='wpdc')
         scheduler.step()
         lr = scheduler.get_lr()[0]

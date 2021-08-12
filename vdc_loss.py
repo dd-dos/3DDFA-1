@@ -86,10 +86,13 @@ class VDCLoss(nn.Module):
         offset[:, -1] = offsetg[:, -1]
 
         N = input.shape[0]
-        gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
-            .view(N, -1, 3).permute(0, 2, 1) + offsetg
-        vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
-            .view(N, -1, 3).permute(0, 2, 1) + offset
+        # import ipdb; ipdb.set_trace(context=10)
+        with torch.cuda.amp.autocast(enabled=False):
+            gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
+                .view(N, -1, 3).permute(0, 2, 1) + offsetg
+            vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
+                .view(N, -1, 3).permute(0, 2, 1) + offset
+
         diff = (gt_vertex - vertex) ** 2
         loss = torch.mean(diff)
         return loss
