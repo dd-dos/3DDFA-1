@@ -59,7 +59,6 @@ def test_video(args):
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
-
     dense_model = FaceAlignment(args.model_path, input_size=256, device='cpu', num_classes=101)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
@@ -101,14 +100,31 @@ def test_video(args):
     print("The video was successfully saved")
 
 def test_image(args):
-    dense_model = FaceAlignment(args.model_path,
-                                args.detector_path)
     img = cv2.imread(args.img_path)
-    processed_frame = dense_model.draw_landmarks(args.img_path, detected_faces=torch.tensor([[0,0,img.shape[0], img.shape[0]]]))
+
+    face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
+    detected_faces = face_detector.forward(torch.tensor(img))[0]
+    detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+
+    dense_model = FaceAlignment(
+        args.model_path, 
+        input_size=256, 
+        device='cpu', 
+        num_classes=101
+    )
+
+    # processed_frame = dense_model.draw_landmarks(
+    #     args.img_path, 
+    #     detected_faces=torch.tensor([[0,0,img.shape[0], img.shape[0]]])
+    # )
+    processed_frame = dense_model.draw_landmarks(
+        args.img_path, 
+        detected_faces=detected_faces
+    )
+
     cv2.imshow('', processed_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    
 
 
 # def test_full(args):
