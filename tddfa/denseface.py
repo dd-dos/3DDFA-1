@@ -93,8 +93,10 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=1.2)
+            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=1.)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
+            # show_ndarray_img(inp)
+            # import ipdb; ipdb.set_trace(context=10)
             # ori_inp = inp.copy()
             # cv2.imwrite('inp.jpg', ori_inp)
             inp = self.transformer(inp)
@@ -213,23 +215,36 @@ class FaceAlignment:
             angles = angles_list
             det = det.numpy().astype(int)
             cv2.rectangle(img, (det[0],det[1]),(det[2],det[3]),(255,255,255))
+            # cv2.putText(img=img, 
+            #             text=f'face{idx}: yaw: {angles[2]:.2f} pitch: {angles[0]:.2f} roll: {angles[1]:.2f}',
+            #             org=(50+idx*50,50+idx*50), 
+            #             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            #             fontScale=0.75,
+            #             color=(255,0,0),
+            #             thickness=1,
+            #             lineType=cv2.LINE_AA)
+            # cv2.putText(img=img, 
+            #             text=f'face: {idx}',
+            #             org=(det[0], det[1]), 
+            #             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            #             fontScale=0.75,
+            #             color=(0,255,0),
+            #             thickness=1,
+            #             lineType=cv2.LINE_AA)
+            landmark = preds[idx]
+            eyes_dict = imutils.get_eyes(landmark)
+            if imutils.check_close_eye(eyes_dict['left']) and imutils.check_close_eye(eyes_dict['right']):
+                eyes = 'close'
+            else:
+                eyes = 'open'
             cv2.putText(img=img, 
-                        text=f'face{idx}: yaw: {angles[2]:.2f} pitch: {angles[0]:.2f} roll: {angles[1]:.2f}',
-                        org=(50+idx*50,50+idx*50), 
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.75,
-                        color=(255,0,0),
-                        thickness=1,
-                        lineType=cv2.LINE_AA)
-            cv2.putText(img=img, 
-                        text=f'face: {idx}',
+                        text=f'eyes: {eyes}',
                         org=(det[0], det[1]), 
                         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                         fontScale=0.75,
                         color=(0,255,0),
                         thickness=1,
                         lineType=cv2.LINE_AA)
-            landmark = preds[idx]
             for pts in landmark:
                 pts = pts.astype(int)
                 cv2.circle(img, pts[:2], 2, (0,255,0), -1, 2)
@@ -368,7 +383,10 @@ class FaceAlignment:
             pad = extra_list[idx]['pad']
 
             # vertex = ddfa.reconstruct_vertex(params)
-            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind].T
+            vertex = fm.reconstruct_vertex(
+                np.zeros((self.input_size,self.input_size,3)), 
+                params
+            )[fm.bfm.kpt_ind].T
 
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
