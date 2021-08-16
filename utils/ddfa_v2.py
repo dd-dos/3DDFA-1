@@ -29,7 +29,7 @@ class DDFAv2_Dataset(data.Dataset):
     def __getitem__(self, idx):
         img, params = self._generate_face_sample(idx)
 
-        # pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
+        # pts = fm.reconstruct_vertex(img, params.reshape(-1,))[fm.bfm.kpt_ind][:,:2]
         # face3d.utils.show_pts(img, pts)
 
         img = self.transform(img)
@@ -48,7 +48,7 @@ class DDFAv2_Dataset(data.Dataset):
         roi_box = label['roi_box'][0]
 
         if self.aug:
-            img, params = ddfa_augment(img, params, roi_box, False)
+            img, params = ddfa_augment(img, params, roi_box, True)
 
         return img, params
 

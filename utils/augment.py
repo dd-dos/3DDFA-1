@@ -21,9 +21,10 @@ hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 def ddfa_augment(img, params, roi_box, full=False):
     if full:
         img = hide_face(img, roi_box)
-        img = vanilla_aug(image=img)
         angles = np.linspace(0, 360, num=13)
         img, params = rotate_samples(img, params, random.choice(angles))
+        img, params = random_shift(img, params)
+        img = vanilla_aug(image=img)
     else:
         if np.random.rand() < 0.5:
             img = hide_face(img, roi_box)
@@ -288,7 +289,7 @@ def random_shift(img, params):
 @numba.njit()
 def shift(img, params, shift_value=(10,10)):
     img_height, img_width = img.shape[:2]
-    canvas = np.zeros((img_height*2,img_width*2,3))
+    canvas = np.zeros((img_height*2,img_width*2,3), dtype=np.uint8)
     crop_size = int(img_height/2)
     canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
     
