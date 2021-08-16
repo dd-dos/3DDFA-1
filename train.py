@@ -342,16 +342,16 @@ def main():
     #     logging.info('Testing from initial')
     #     validate(val_loader, model, criterion, args.start_epoch)
 
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
-    optimizer = torch.optim.SGD(model.parameters(),
-                               lr=args.base_lr,
-                              momentum=args.momentum,
-                             weight_decay=args.weight_decay,
-                            nesterov=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
+    # optimizer = torch.optim.SGD(model.parameters(),
+    #                            lr=args.base_lr,
+    #                           momentum=args.momentum,
+    #                          weight_decay=args.weight_decay,
+    #                         nesterov=True)
 
     '''
     First training.
-    Use only WPDC loss.
+    Use WPDC loss.
     '''
     # scheduler = CyclicCosineDecayLR(optimizer, 
     #                             init_decay_epochs=10,
@@ -361,14 +361,14 @@ def main():
 
     '''
     Second training.
-    Use both WPDC and VDC loss.
+    Use VDC loss.
     Switch to SGD.
     '''
     scheduler = CyclicCosineDecayLR(optimizer, 
                             init_decay_epochs=5,
                             min_decay_lr=1e-7,
                             restart_interval = 3,
-                            restart_lr=1e-4)
+                            restart_lr=1e-5)
     global lr
     lr = args.base_lr
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
@@ -378,7 +378,7 @@ def main():
 
     for epoch in range(args.epochs):
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler)
-        validate(val_loader, model, epoch, criterion='wpdc')
+        validate(val_loader, model, epoch, criterion='vdc')
         scheduler.step()
         lr = scheduler.get_lr()[0]
 
