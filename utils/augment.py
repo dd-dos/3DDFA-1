@@ -18,24 +18,27 @@ hand_folder = os.path.join(cwd, 'hand')
 hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
-def ddfa_augment(img, param, roi_box, full=False):
+def ddfa_augment(img, params, roi_box, full=False):
     if full:
         img = hide_face(img, roi_box)
         img = vanilla_aug(image=img)
         angles = np.linspace(0, 360, num=13)
-        img, param = rotate_samples(img, param, random.choice(angles))
+        img, params = rotate_samples(img, params, random.choice(angles))
     else:
         if np.random.rand() < 0.5:
             img = hide_face(img, roi_box)
 
+        if np.random.rand() < 0.5:
+            angles = np.linspace(0, 360, num=13)
+            img, params = rotate_samples(img, params, random.choice(angles))
+
+        if np.random.rand() < 0.5:
+            img, params = random_shift(img, params)
+
         if np.random.rand() < 0.95:
             img = vanilla_aug(image=img)
-    
-        if np.random.rand() > 0.5:
-            angles = np.linspace(0, 360, num=13)
-            img, param = rotate_samples(img, param, random.choice(angles))
 
-    return np.ascontiguousarray(img), param
+    return np.ascontiguousarray(img), params
 
 
 def hide_face(img, roi_box):
@@ -67,18 +70,18 @@ vanilla_aug = iaa.OneOf([
 
 
 @numba.njit()
-def n_rotate_vertex(img, param, angle):
+def n_rotate_vertex(img, params, angle):
     """
-    Create param for a rotated 3dmm.
+    Create params for a rotated 3dmm.
 
     Params:
-    :param: 3dmm parameters.
+    :params: 3dmm parameters.
             -> np.ndarray.
     :angle: rotate angle. 
     """
     img_height, img_width = img.shape[:2]
 
-    p_ = param[:12].reshape(3, -1)
+    p_ = params[:12].reshape(3, -1)
     p = p_[:, :3]
     offset = np.zeros((3,1), dtype=np.float64)
     offset[:,0] = p_[:, 3]
@@ -103,8 +106,8 @@ def n_rotate_vertex(img, param, angle):
     flip_offset = np.array([0, img_height, 0], dtype=np.float64)
     norm_trans = np.array([img_width/2, img_height/2, 0], dtype=np.float64)
 
-    # shp = param[12:72].reshape(-1, 1)
-    # exp = param[72:].reshape(-1, 1)
+    # shp = params[12:72].reshape(-1, 1)
+    # exp = params[72:].reshape(-1, 1)
     # vertex = fm.bfm.reduced_generated_vertices(shp, exp)[fm.bfm.kpt_ind]
 
     # trans_v = vertex @ p.T + offset.reshape(3,) + norm_trans
@@ -121,23 +124,23 @@ def n_rotate_vertex(img, param, angle):
                 flip_offset) @ flip_matrix - norm_trans
 
     new_camera_matrix = np.concatenate((new_p, new_offset.reshape(3,1)), axis=1)
-    param[:12] = new_camera_matrix.reshape(12,1)
+    params[:12] = new_camera_matrix.reshape(12,1)
 
-    # vertex = fm.reconstruct_vertex(img, param)[fm.bfm.kpt_ind]
+    # vertex = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind]
     # face3d.utils.show_pts(r_img, vertex)
     # import ipdb; ipdb.set_trace(context=10)
 
-    return param
+    return params
 
 
-def rotate_samples(img, param, angle):
-    if isinstance(param, torch.Tensor):
-        param = param.numpy().astype(np.float64)
+def rotate_samples(img, params, angle):
+    if isinstance(params, torch.Tensor):
+        params = params.numpy().astype(np.float64)
     else:
-        param = param.astype(np.float64)
+        params = params.astype(np.float64)
 
-    # r_param = rotate_vertex(img, param, angle)
-    r_param = n_rotate_vertex(img, param, angle)
+    # r_param = rotate_vertex(img, params, angle)
+    r_param = n_rotate_vertex(img, params, angle)
     r_img = ndimage.rotate(img, -angle, reshape=False)
 
     return r_img, r_param
@@ -197,10 +200,10 @@ def hand_face(face_img, face_location):
 @numba.njit()
 def overlay_transparent(src, overlay, pos, scale=1):
     """
-    :param src: Input Color Background Image
-    :param overlay: transparent Image (BGRA)
-    :param pos:  position where the image to be blit.
-    :param scale : scale factor of alpha channel.
+    :src: Input Color Background Image
+    :overlay: transparent Image (BGRA)
+    :pos:  position where the image to be blit.
+    :scale: scale factor of alpha channel.
     :return: Resultant Image
     """
     h,w,_ = overlay.shape  # Size of foreground
@@ -276,3 +279,30 @@ def crop_range(img,
 
     return img
 
+
+def random_shift(img, params):
+    shift_x = np.random.randint(5,16)
+    shift_y = np.random.randint(5,16)
+    return shift(img, params, shift_value=(shift_x, shift_y))
+
+@numba.njit()
+def shift(img, params, shift_value=(10,10)):
+    img_height, img_width = img.shape[:2]
+    canvas = np.zeros((img_height*2,img_width*2,3))
+    crop_size = int(img_height/2)
+    canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
+    
+    new_x1 = crop_size+shift_value[0]
+    new_y1 = crop_size+shift_value[1]
+    new_x2 = crop_size+img_width+shift_value[0]
+    new_y2 = crop_size+img_height+shift_value[1]
+    
+    new_img = canvas[new_y1:new_y2, new_x1:new_x2]
+
+    '''
+    params at index 3 and 7 account for the translation along x and y axis.
+    '''
+    params[3] -= shift_value[0]
+    params[7] += shift_value[1]
+
+    return new_img, params

@@ -95,7 +95,7 @@ class FaceAlignment:
         for idx, det in enumerate(detected_faces):
             cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=1.)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
-            # show_ndarray_img(inp)
+            show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)
             # ori_inp = inp.copy()
             # cv2.imwrite('inp.jpg', ori_inp)
