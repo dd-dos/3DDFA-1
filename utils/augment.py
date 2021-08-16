@@ -20,21 +20,17 @@ hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
 def ddfa_augment(img, params, roi_box, full=False):
     if full:
-        img = hide_face(img, roi_box)
+        img = hide_face(img, params, roi_box)
         angles = np.linspace(0, 360, num=13)
         img, params = rotate_samples(img, params, random.choice(angles))
-        img, params = random_shift(img, params)
         img = vanilla_aug(image=img)
     else:
         if np.random.rand() < 0.5:
-            img = hide_face(img, roi_box)
+            img = hide_face(img, params, roi_box)
 
         if np.random.rand() < 0.5:
             angles = np.linspace(0, 360, num=13)
             img, params = rotate_samples(img, params, random.choice(angles))
-
-        if np.random.rand() < 0.5:
-            img, params = random_shift(img, params)
 
         if np.random.rand() < 0.95:
             img = vanilla_aug(image=img)
@@ -42,11 +38,14 @@ def ddfa_augment(img, params, roi_box, full=False):
     return np.ascontiguousarray(img), params
 
 
-def hide_face(img, roi_box):
-    if np.random.rand() < 0.5:
+def hide_face(img, params, roi_box):
+    rate = np.random.rand()
+    if rate < 0.3:
         img = hand_face(img, roi_box)
-    else:
+    elif 0.3 <= rate < 0.6:
         img = crop_range(img, ratio=1/3)
+    else:
+        img, params = random_shift(img, params)
 
     return img
 
