@@ -40,9 +40,11 @@ rs = RunningStats()
 import tqdm
 from pathlib import Path
 import scipy.io as sio
-file_list = list(Path('data').glob('**/*.mat'))
+file_list = list(Path('data/300VW-3D_cropped_closed_eyes_3ddfa').glob('**/*.mat')) + \
+            list(Path('data/300WLP_3ddfa').glob('**/*.mat'))
+            
 for file_path in tqdm.tqdm(file_list, total=len(file_list)):
     params = sio.loadmat(file_path)['params']
     rs.push(params)
 
-sio.savemat('params_mean_std.mat', {'mean': rs.mean(), 'std': rs.standard_deviation()})
+sio.savemat('params_mean_std_12_pose_60_shp_29_exp.mat', {'mean': rs.mean(), 'std': rs.standard_deviation()})

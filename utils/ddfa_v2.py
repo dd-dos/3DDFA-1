@@ -9,14 +9,13 @@ from .augment import ddfa_augment
 from .face3d import face3d
 import scipy.io as sio
 from .params import params_mean_101, params_std_101
-import numba
 fm = face3d.face_model.FaceModel()
 
 def img_loader(path):
     return cv2.imread(path, cv2.IMREAD_COLOR)
 
 class DDFAv2_Dataset(data.Dataset):
-    def __init__(self, root, transform=None, aug=True, **kargs):
+    def __init__(self, root, transform=None, aug=True):
         self.root = root
         self.transform = transform
         self.file_list = list(Path(root).glob('**/*.jpg'))
@@ -29,6 +28,9 @@ class DDFAv2_Dataset(data.Dataset):
     def __getitem__(self, idx):
         img, params = self._generate_face_sample(idx)
 
+        '''
+        This part is for showing samples before feeding the model.
+        '''
         # pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
         # face3d.utils.show_pts(img, pts)
 

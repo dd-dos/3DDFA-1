@@ -53,5 +53,7 @@ THIS PART BELONG TO THE NEW 101 PARAMS:
 meta_101 = sio.loadmat(osp.join(d,'params_mean_std_12_pose_60_shp_29_exp.mat'))
 params_mean_101 = meta_101['mean'].astype(np.float32).reshape(-1,)
 params_std_101 = meta_101['std'].astype(np.float32).reshape(-1,)
-# The z coords of translation vector need to be 1. to prevent dividing by zero.
+'''
+The z coords of translation vector need to be 1 to prevent dividing by zero.
+'''
 params_std_101[11] = 1.

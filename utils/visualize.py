@@ -19,6 +19,7 @@ def log_training_samples(imgs, preds, gts, writer, id, job):
         arr_img = np.ascontiguousarray(arr_img, dtype=np.uint8)
 
         gt_img = arr_img.copy()
+        original_img = arr_img.copy()
 
         pred = preds[idx].cpu().numpy().reshape(-1,)
         gt = gts[idx].cpu().numpy().reshape(-1,)
@@ -34,7 +35,7 @@ def log_training_samples(imgs, preds, gts, writer, id, job):
             _pts = tuple(_pts.astype(np.uint8))
             cv2.circle(gt_img, _pts, 2, (0,255,0), -1, 10)
 
-        comparision = np.concatenate((gt_img, arr_img), axis=1)
+        comparision = np.concatenate((original_img, gt_img, arr_img), axis=1)
         comparision = cv2.cvtColor(comparision, cv2.COLOR_BGR2RGB)
 
         tensor_img = torch.tensor(comparision.transpose(2,0,1)/255.,

@@ -27,22 +27,22 @@ from utils.visualize import log_training_samples, RandomBullShit
 import tqdm
 from datetime import datetime
 import os
-# global args (configuration)
+
 lr = None
 LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
-from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
+# from clearml import Task
+# task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
-    parser.add_argument('-j', '--workers', default=6, type=int)
+    parser.add_argument('--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
-    parser.add_argument('-b', '--train-batch-size', default=128, type=int)
-    parser.add_argument('-vb', '--val-batch-size', default=32, type=int)
+    parser.add_argument('--train-batch-size', default=128, type=int)
+    parser.add_argument('--val-batch-size', default=32, type=int)
     parser.add_argument('--base-lr', '--learning-rate', default=0.001, type=float)
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                         help='momentum')
@@ -50,8 +50,8 @@ def parse_args():
     parser.add_argument('--print-freq', '-p', default=20, type=int)
     parser.add_argument('--resume', default='', type=str, metavar='PATH')
     parser.add_argument('--devices-id', default='0,1', type=str)
-    parser.add_argument('--train-one', default='', type=str)
-    parser.add_argument('--train-two', default='', type=str)
+    parser.add_argument('--train-1', default='', type=str)
+    parser.add_argument('--train-2', default='', type=str)
     parser.add_argument('--val-path', default='', type=str)
 
     parser.add_argument('--snapshot', default='', type=str)
@@ -62,40 +62,31 @@ def parse_args():
     parser.add_argument('--arch', default='mobilenet_1', type=str,
                         choices=arch_choices)
     parser.add_argument('--frozen', default='false', type=str2bool)
-    parser.add_argument('--milestones', default='15,25,30', type=str)
-    parser.add_argument('--task', default='all', type=str)
-    parser.add_argument('--test_initial', default='false', type=str2bool)
-    parser.add_argument('--warmup', default=-1, type=int)
-    parser.add_argument('--param-fp-train',
-                        default='',
-                        type=str)
-    parser.add_argument('--param-fp-val',
-                        default='')
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
     parser.add_argument('--resample-num', default=132, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
     parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
     parser.add_argument('--use-amp', action='store_true')
+    parser.add_argument('--use-scheduler', action='store_true')
+    parser.add_argument('--scheduler-init-decay-epoch', default=10, type=int)
+    parser.add_argument('--scheduler-min-decay-lr', default=1e-6, type=float)
+    parser.add_argument('--scheduler-restart-interval', default=3, type=float)
+    parser.add_argument('--scheduler-restart-lr', default=1e-4, type=float)
+    parser.add_argument('--optimizer', default='adam', type=str)
 
     global args
     args = parser.parse_args()
     # some other operations
     args.devices_id = [int(d) for d in args.devices_id.split(',')]
-    args.milestones = [int(m) for m in args.milestones.split(',')]
 
     snapshot_dir = osp.split(args.snapshot)[0]
     mkdir(snapshot_dir)
 
 
-def print_args(args):
-    for arg in vars(args):
-        s = arg + ': ' + str(getattr(args, arg))
-        logging.info(s)
-
-
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
-    # logging.info(f'Save checkpoint to {filename}')
+    logging.info(f'Save checkpoint to {filename}')
+
 
 ITER = 0
 def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
@@ -107,7 +98,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
     use_amp = args.use_amp
     num_samples = train_loader.dataset.__len__()
 
-    # Logging after every $(logging_step) iterations
+    '''
+    Logging after every $(logging_step) iterations
+    '''
     logging_step = np.ceil(num_samples/(10*args.train_batch_size))
     top_loss = 0
     end = time.time()
@@ -123,10 +116,10 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             output = model(input)
             
             data_time.update(time.time() - end)
-            # import ipdb; ipdb.set_trace(context=10)
             wpdc_loss_value = wpdc_loss(output, target)
-            vdc_loss_value = vdc_loss(output, target)
-            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            # vdc_loss_value = vdc_loss(output, target)
+            # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            total_loss = wpdc_loss_value
             losses.update(total_loss)
 
             if use_amp:
@@ -139,7 +132,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
 
         random_bullshit.update(output.cuda(), target)
 
-        # measure elapsed time
+        '''
+        Measure elapsed time
+        '''
         batch_time.update(time.time() - end)
         end = time.time()
 
@@ -161,7 +156,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             writer.add_scalar('Loss/Train', losses.avg, ITER)
             random_bullshit.go(writer, ITER, 'Train')
 
-            # Log top-loss samples.
+            '''
+            Log top-loss samples.
+            '''
             input = top_loss_samples['input']
             target = top_loss_samples['target']
             output = top_loss_samples['output'] 
@@ -171,7 +168,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
         ITER += 1
 
 
-def validate(val_loader, model, epoch, criterion='wpdc'):
+def validate(val_loader, model, epoch):
     global LOSS
     model.eval()
     use_amp = args.use_amp
@@ -187,7 +184,6 @@ def validate(val_loader, model, epoch, criterion='wpdc'):
         top_loss = 0
         with torch.cuda.amp.autocast(enabled=use_amp):
             for i, (input, target) in enumerate(val_loader):
-                # compute output
                 target.requires_grad = False
                 target = target.cuda(non_blocking=True)
                 output = model(input)
@@ -227,7 +223,9 @@ def validate(val_loader, model, epoch, criterion='wpdc'):
 
         random_bullshit.go(writer, ITER, 'Val')
 
-        # Log top-loss samples.
+        '''
+        Log top-loss samples.
+        '''
         input = top_loss_samples['input']
         target = top_loss_samples['target']
         output = top_loss_samples['output']
@@ -268,7 +266,6 @@ def validate(val_loader, model, epoch, criterion='wpdc'):
 def main():
     parse_args()  
 
-    # logging setup
     logging.basicConfig(
         format='[%(asctime)s] [p%(process)s] [%(pathname)s:%(lineno)d] [%(levelname)s] %(message)s',
         level=logging.INFO,
@@ -278,97 +275,74 @@ def main():
         ]
     )
 
-    if args.loss.lower() == 'wpdc':
-        criterion = WPDCLoss(opt_style=args.opt_style).cuda()
-        logging.info('Use WPDC Loss')
-    elif args.loss.lower() == 'vdc':
-        criterion = VDCLoss(opt_style=args.opt_style).cuda()
-        logging.info('Use VDC Loss')
-    elif args.loss.lower() == 'pdc':
-        criterion = nn.MSELoss(size_average=args.size_average).cuda()
-        logging.info('Use PDC loss')
-    else:
-        raise Exception(f'Unknown Loss {args.loss}')
-
-
     if args.resume:
         model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
         if Path(args.resume).is_file():
-            logging.info(f'=> loading checkpoint {args.resume}')
+            logging.info(f'Loading checkpoint {args.resume}')
             checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
 
             model_dict = model.state_dict()
-            # because the model is trained by multiple gpus, prefix module should be removed
+            '''
+            Because the model is trained by multiple gpus, prefix module should be removed
+            '''
             for k in checkpoint.keys():
                 model_dict[k.replace('module.', '')] = checkpoint[k]
             model.load_state_dict(model_dict)
         else:
-            logging.info(f'=> no checkpoint found at {args.resume}')
+            logging.info(f'=> No checkpoint found at {args.resume}')
     else:
         model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
 
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
 
-    normalize = NormalizeGjz(mean=127.5, std=128)  # may need optimization
-
     train_dataset_1 = DDFAv2_Dataset(
-        root=args.train_one,
-        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        root=args.train_1,
+        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
         aug=True
     )
 
     train_dataset_2 = DDFAv2_Dataset(
-        root=args.train_two,
-        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        root=args.train_2,
+        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
         aug=True
     )
-
-    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
     
     val_dataset = DDFAv2_Dataset(
         root=args.val_path,
-        transform=transforms.Compose([ToTensorGjz(), normalize]),
+        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
         aug=False
     )
 
+    logging.info(f'Number of samples: ')
+    logging.info(f'=> {args.train_1}: {len(train_dataset_1)}')
+    logging.info(f'=> {args.train_2}: {len(train_dataset_2)}')
+    logging.info(f'=> {args.val_path}: {len(val_dataset)}')
+
+    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
     train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 
     cudnn.benchmark = True
-    # if args.test_initial:
-    #     logging.info('Testing from initial')
-    #     validate(val_loader, model, criterion, args.start_epoch)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
-    # optimizer = torch.optim.SGD(model.parameters(),
-    #                            lr=args.base_lr,
-    #                           momentum=args.momentum,
-    #                          weight_decay=args.weight_decay,
-    #                         nesterov=True)
+    if args.optimizer=='adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.base_lr)
+    else:
+        optimizer = torch.optim.SGD(model.parameters(),
+                                lr=args.base_lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay,
+                                nesterov=True)
 
-    '''
-    First training.
-    Use WPDC loss.
-    '''
-    # scheduler = CyclicCosineDecayLR(optimizer, 
-    #                             init_decay_epochs=10,
-    #                             min_decay_lr=1e-6,
-    #                             restart_interval = 3,
-    #                             restart_lr=1e-4)
+    if args.use_scheduler:
+        scheduler = CyclicCosineDecayLR(optimizer, 
+                                    init_decay_epochs=args.init_decay_epochs,
+                                    min_decay_lr=args.min_decay_lr,
+                                    restart_interval =args.restart_interval,
+                                    restart_lr=args.restart_lr)
 
-    '''
-    Second training.
-    Use VDC loss.
-    Switch to SGD.
-    '''
-    scheduler = CyclicCosineDecayLR(optimizer, 
-                            init_decay_epochs=5,
-                            min_decay_lr=1e-7,
-                            restart_interval = 3,
-                            restart_lr=1e-5)
     global lr
     lr = args.base_lr
     wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
@@ -378,9 +352,12 @@ def main():
 
     for epoch in range(args.epochs):
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler)
-        validate(val_loader, model, epoch, criterion='vdc')
-        scheduler.step()
-        lr = scheduler.get_lr()[0]
+        validate(val_loader, model, epoch)
+
+        if args.use_scheduler:
+            scheduler.step()
+            lr = scheduler.get_lr()[0]
+
 
 if __name__ == '__main__':
     main()
