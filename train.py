@@ -32,8 +32,8 @@ lr = None
 LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
-# from clearml import Task
-# task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
+from clearml import Task
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument('--devices-id', default='0,1', type=str)
     parser.add_argument('--train-1', default='', type=str)
     parser.add_argument('--train-2', default='', type=str)
+    parser.add_argument('--train-3', default='', type=str)
     parser.add_argument('--val-path', default='', type=str)
 
     parser.add_argument('--snapshot', default='', type=str)
@@ -307,6 +308,12 @@ def main():
         transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
         aug=True
     )
+
+    train_dataset_3 = DDFAv2_Dataset(
+        root=args.train_3,
+        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+        aug=True
+    )
     
     val_dataset = DDFAv2_Dataset(
         root=args.val_path,
@@ -317,9 +324,10 @@ def main():
     logging.info(f'Number of samples: ')
     logging.info(f'=> {args.train_1}: {len(train_dataset_1)}')
     logging.info(f'=> {args.train_2}: {len(train_dataset_2)}')
+    logging.info(f'=> {args.train_3}: {len(train_dataset_3)}')
     logging.info(f'=> {args.val_path}: {len(val_dataset)}')
 
-    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2])
+    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2, train_dataset_3])
     train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
