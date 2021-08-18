@@ -21,6 +21,7 @@ python3 train.py --arch="mobilenet_1" \
     --log-file="${LOG_FILE}" \
     --train-1 'data/300WLP_3ddfa' \
     --train-2 'data/300VW-3D_cropped_closed_eyes_3ddfa' \
+    --train-3 'data/300VW-3D_cropped_non_closed_eyes_3ddfa' \
     --val-path 'data/AFLW2000_3ddfa' \
     --use-amp \
-    --resume 'snapshot/2021-08-16/last.pth.tar'
+    --resume 'snapshot/2021-08-17/best.pth.tar'

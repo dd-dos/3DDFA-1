@@ -50,7 +50,7 @@ class DDFAv2_Dataset(data.Dataset):
         roi_box = label['roi_box'][0]
 
         if self.aug:
-            img, params = ddfa_augment(img, params, roi_box, True)
+            img, params = ddfa_augment(img, params, roi_box, False)
 
         return img, params
 
