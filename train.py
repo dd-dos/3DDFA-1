@@ -118,9 +118,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             
             data_time.update(time.time() - end)
             wpdc_loss_value = wpdc_loss(output, target)
-            # vdc_loss_value = vdc_loss(output, target)
-            # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
-            total_loss = wpdc_loss_value
+            vdc_loss_value = vdc_loss(output, target)
+            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            # total_loss = wpdc_loss_value
             losses.update(total_loss)
 
             if use_amp:
