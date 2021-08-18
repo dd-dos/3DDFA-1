@@ -59,7 +59,7 @@ def test_video(args):
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
-    dense_model = FaceAlignment(args.model_path, input_size=256, device='cpu', num_classes=101)
+    dense_model = FaceAlignment(args.model_path, input_size=128, device='cpu', num_classes=101)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:

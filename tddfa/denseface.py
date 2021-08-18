@@ -93,9 +93,9 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=1.)
+            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=.9)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
-            show_ndarray_img(inp)
+            # show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)
             # ori_inp = inp.copy()
             # cv2.imwrite('inp.jpg', ori_inp)
@@ -471,8 +471,8 @@ class FaceAlignment:
             length = extra_list[idx]['length']
             pad = extra_list[idx]['pad']
 
-            if self.input_size == 256:
-                vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind][:,:2].T
+            if self.input_size == 256 or self.input_size == 128:
+                vertex = fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[fm.bfm.kpt_ind][:,:2].T
             else:
                 vertex = ddfa.reconstruct_vertex(params)
 
