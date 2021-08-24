@@ -1,14 +1,13 @@
 import argparse
 import logging
-import sys
 from pathlib import Path
-import cv2
-from tddfa.denseface import FaceAlignment
 import torch
-import time
-import torch
-import torchvision
 
+import cv2
+import numpy as np
+import torch
+
+from tddfa.denseface import FaceAlignment
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -118,15 +117,17 @@ def test_image(args):
     img = cv2.imread(args.img_path)
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
-    detected_faces = face_detector.forward(torch.tensor(img))[0]
-    detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    if img.shape[0] > 128:
+        detected_faces = face_detector.forward(torch.tensor(img))[0]
+        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    else:
+        detected_faces = [torch.tensor([0, 0, img.shape[0], img.shape[1]])]
 
     dense_model = FaceAlignment(
-        args.model_path, 
-        input_size=256, 
+        model_path=args.model_path, 
+        input_size=args.input_size, 
         device='cpu', 
-        num_classes=101
-    )
+        num_classes=args.num_classes,)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 
@@ -134,7 +135,8 @@ def test_image(args):
     # )
     processed_frame = dense_model.draw_landmarks(
         args.img_path, 
-        detected_faces=detected_faces
+        detected_faces=detected_faces,
+        no_background=False
     )
 
     cv2.imshow('', processed_frame)
