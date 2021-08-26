@@ -93,7 +93,7 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=.9)
+            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=.85)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
             # show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)
@@ -227,6 +227,7 @@ class FaceAlignment:
                             color=(255,0,0),
                             thickness=1,
                             lineType=cv2.LINE_AA)
+                print(f'face{idx}: yaw: {angles[2]:.2f} pitch: {angles[0]:.2f} roll: {angles[1]:.2f}')
                 cv2.putText(img=img, 
                             text=f'face: {idx}',
                             org=(det[0], det[1]), 
@@ -495,8 +496,8 @@ class FaceAlignment:
 
             landmarks.append(pts_img.T)
 
-            # _, pose = estimate_pose.parse_pose(params)
-            pose = (0,0,0)
+            _, pose = estimate_pose.parse_pose(params)
+            # pose = (0,0,0)
             angles.append({
                 'yaw': pose[0] / math.pi * 180, 
                 'pitch': pose[1] / math.pi * 180,
