@@ -5,13 +5,12 @@ import cv2
 import numpy as np
 import torch
 import torchvision
-from .utils import ddfa, estimate_pose, imutils
-from .utils.memory import empty_cache_memory
+from utils import ddfa, estimate_pose, imutils
 from utils.face3d import face3d
 fm = face3d.face_model.FaceModel()
 from utils.face3d.face3d.utils import *
 
-from . import mobilenet_v1
+import mobilenet_v1
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -93,7 +92,7 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=.85)
+            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=self.expand_ratio)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
             # show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)

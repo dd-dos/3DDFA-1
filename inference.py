@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import torch
 
-from tddfa.denseface import FaceAlignment
+from denseface import FaceAlignment
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -65,7 +65,8 @@ def test_video(args):
         model_path=args.model_path, 
         input_size=args.input_size, 
         device='cpu', 
-        num_classes=args.num_classes)
+        num_classes=args.num_classes,
+        expand_ratio=1.)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -90,6 +91,7 @@ def test_video(args):
         key = cv2.waitKey(1) & 0xFF
 
         t0 = time.time()
+
         try:
             frame = \
                 dense_model.draw_landmarks(

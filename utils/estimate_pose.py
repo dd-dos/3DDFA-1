@@ -7,11 +7,13 @@ Reference: https://github.com/YadiraF/PRNet/blob/master/utils/estimate_pose.py
 
 from math import cos, sin, atan2, asin, sqrt
 import numpy as np
-from .params import param_mean, param_std
+from scipy.misc.common import face
+from .face3d import face3d
 
+fm = face3d.face_model.FaceModel()
 
 def parse_pose(param):
-    param = param * param_std + param_mean
+    param = param * fm.bfm.params_mean_101 + fm.bfm.params_std_101
     Ps = param[:12].reshape(3, -1)  # camera matrix
     # R = P[:, :3]
     s, R, t3d = P2sRt(Ps)
