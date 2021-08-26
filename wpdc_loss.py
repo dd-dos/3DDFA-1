@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from math import sqrt
 from utils.io import _numpy_to_cuda
-from utils.params import *
+from utils.params import keypoints
 from utils.face3d.face3d.face_model import FaceModel
 fm = FaceModel()
 
@@ -44,9 +44,7 @@ class WPDCLoss(nn.Module):
         self.w_shp_length = self.w_shp.shape[0] // 3
         self.keypoints = _to_tensor(keypoints)
         self.resample_num = resample_num
-
-        _, _, self.magic_number, _, _ = \
-            fm._parse_params(params_mean_101)
+        self.magic_number = fm.scale_mean
 
     def reconstruct_and_parse(self, input, target):
         # # reconstruct

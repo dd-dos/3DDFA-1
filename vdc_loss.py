@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 from utils.io import _load, _numpy_to_cuda, _numpy_to_tensor
-from utils.params import *
+from utils.params import keypoints
 from utils.face3d.face3d.face_model import FaceModel
 fm = FaceModel()
 
@@ -27,8 +27,8 @@ class VDCLoss(nn.Module):
         super(VDCLoss, self).__init__()
 
         # self.u = _to_tensor(u)
-        self.param_mean = _to_tensor(params_mean_101)
-        self.param_std = _to_tensor(params_std_101)
+        self.param_mean = _to_tensor(fm.bfm.params_mean_101)
+        self.param_std = _to_tensor(fm.bfm.params_std_101)
         # self.w_shp = _to_tensor(w_shp)
         # self.w_exp = _to_tensor(w_exp)
 

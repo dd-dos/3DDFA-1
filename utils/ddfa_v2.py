@@ -46,7 +46,7 @@ class DDFAv2_Dataset(data.Dataset):
         img = self.img_loader(img_path)
         label = sio.loadmat(label_path)
 
-        params = label['params']
+        params = label['params'].reshape(101,1)
         roi_box = label['roi_box'][0]
 
         if self.aug:
@@ -56,6 +56,6 @@ class DDFAv2_Dataset(data.Dataset):
 
     def _transform_params(self, params):
         t_params = params.reshape(-1,).astype(np.float32)
-        t_params = (t_params - params_mean_101) / params_std_101
+        t_params = (t_params - fm.bfm.params_mean_101) / fm.bfm.params_std_101
 
         return t_params
