@@ -53,9 +53,9 @@ def hide_face(img, params, roi_box):
 vanilla_aug = iaa.OneOf([
     iaa.Sometimes(0, iaa.Grayscale()),
     iaa.Grayscale(),
-    # iaa.imgcorruptlike.Pixelate(severity=(1, 3)),	
-    # iaa.imgcorruptlike.JpegCompression(severity=(3, 5)),	
-    iaa.KMeansColorQuantization(n_colors=(80, 100)),	
+    iaa.imgcorruptlike.Pixelate(severity=(1, 2)),
+    iaa.imgcorruptlike.JpegCompression(severity=(1, 2)),
+    iaa.KMeansColorQuantization(n_colors=(80, 100)),
     iaa.UniformColorQuantization(n_colors=(10, 15)),
     iaa.LinearContrast((1.5, 2)),
     iaa.LogContrast(gain=(0.5, 1.5)),
@@ -65,7 +65,7 @@ vanilla_aug = iaa.OneOf([
     iaa.AdditiveLaplaceNoise(scale=(5, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15), per_channel=True),
     iaa.ChannelShuffle(p=1),
-    # iaa.imgcorruptlike.SpeckleNoise(severity=(1,3))
+    iaa.imgcorruptlike.SpeckleNoise(severity=(1,2))
 ])
 
 

@@ -8,11 +8,11 @@ LOG_FILE="${LOG_DIR}/${LOG_ALIAS}_`date +'%Y-%m-%d_%H:%M.%S'`.log"
 #echo $LOG_FILE
 
 python3 train.py --arch="mobilenet_1" \
-    --loss=vdc \
+    --loss=wpdc \
     --snapshot="snapshot/phase1_wpdc" \
     --opt-style=resample \
     --resample-num=132 \
-    --train-batch-size=64 \
+    --train-batch-size=128 \
     --val-batch-size=128 \
     --base-lr=1e-4 \
     --epochs=9999 \
@@ -24,5 +24,5 @@ python3 train.py --arch="mobilenet_1" \
     --train-3 'data/300VW-3D_cropped_non_closed_eyes_3ddfa' \
     --val-path 'data/AFLW2000_3ddfa' \
     --use-amp \
-    --resume 'snapshot/2021-08-17/best.pth.tar' \
-    --beta=0.65
+    --resume 'snapshot/2021-08-17/last.pth.tar' \
+    --beta=0.8
