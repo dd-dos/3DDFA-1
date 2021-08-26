@@ -29,8 +29,8 @@ class WPDCLoss(nn.Module):
     def __init__(self, opt_style='resample', resample_num=132):
         super(WPDCLoss, self).__init__()
         self.opt_style = opt_style
-        self.param_mean = _to_tensor(params_mean_101)
-        self.param_std = _to_tensor(params_std_101)
+        self.param_mean = _to_tensor(fm.bfm.params_mean_101)
+        self.param_std = _to_tensor(fm.bfm.params_std_101)
 
         # self.u = _to_tensor(u)
         # self.w_shp = _to_tensor(w_shp)
@@ -44,6 +44,9 @@ class WPDCLoss(nn.Module):
         self.w_shp_length = self.w_shp.shape[0] // 3
         self.keypoints = _to_tensor(keypoints)
         self.resample_num = resample_num
+
+        _, _, self.magic_number, _, _ = \
+            fm._parse_params(params_mean_101)
 
     def reconstruct_and_parse(self, input, target):
         # # reconstruct
@@ -102,13 +105,11 @@ class WPDCLoss(nn.Module):
 
         ## This is the optimizest version
         # for shape_exp
-        magic_number = 0.00057339936  # scale
         param_diff_shape_exp = torch.abs(input[:, 12:] - target[:, 12:])
         # weights[:, 12:] = magic_number * param_diff_shape_exp * self.w_norm
         w = torch.cat((w_shp_base, w_exp_base), dim=1)
         w_norm = torch.norm(w, dim=0)
-        # print('here')
-        weights[:, 12:] = magic_number * param_diff_shape_exp * w_norm
+        weights[:, 12:] = self.magic_number * param_diff_shape_exp * w_norm
 
         eps = 1e-6
         weights[:, :11] += eps

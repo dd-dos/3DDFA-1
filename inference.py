@@ -18,6 +18,7 @@ def argparser():
     P.add_argument('--mode', type=str, default='video', help='testing mode: video, img')
     P.add_argument('--video-path', type=str, default=None, help='path to input video')
     P.add_argument('--img-path', type=str, default=None, help='path to input image')
+    P.add_argument('--folder-path', type=str, default=None, help='path to input folder')
     P.add_argument('--save-path', type=str, default=None, help='path to save result')
     P.add_argument('--config_path', type=str, help='config path')
     P.add_argument('--bfm-fp', type=str, default='configs/bfm_noneck_v3.pkl')
@@ -136,13 +137,13 @@ def test_image(args):
     processed_frame = dense_model.draw_landmarks(
         args.img_path, 
         detected_faces=detected_faces,
+        draw_angles=False,
         no_background=False
     )
 
     cv2.imshow('', processed_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
 
 # def test_full(args):
 #     """
@@ -167,6 +168,11 @@ if __name__=="__main__":
         test_video(args)
     elif args.mode == 'img':
         test_image(args)
+    elif args.mode == 'folder':
+        img_list = list(Path(args.folder_path).glob('**/*.jpg'))
+        for img_path in img_list:
+            args.img_path = str(img_path)
+            test_image(args)
     else:
         logging.error(f'Invalid mode {args.mode}')
     

@@ -1,5 +1,5 @@
-python3 inference.py --mode='video' \
+python3 inference.py --mode='folder' \
                  --model-path='snapshot/2021-07-22/last.pth.tar' \
-                 --img-path='samples/0386.jpg' \
+                 --folder-path='samples/001' \
                  --input-size=120 \
                  --num-classes=62
