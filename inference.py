@@ -1,14 +1,13 @@
 import argparse
 import logging
-import sys
 from pathlib import Path
-import cv2
-from tddfa.denseface import FaceAlignment
 import torch
-import time
-import torch
-import torchvision
 
+import cv2
+import numpy as np
+import torch
+
+from tddfa.denseface import FaceAlignment
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -19,6 +18,7 @@ def argparser():
     P.add_argument('--mode', type=str, default='video', help='testing mode: video, img')
     P.add_argument('--video-path', type=str, default=None, help='path to input video')
     P.add_argument('--img-path', type=str, default=None, help='path to input image')
+    P.add_argument('--folder-path', type=str, default=None, help='path to input folder')
     P.add_argument('--save-path', type=str, default=None, help='path to save result')
     P.add_argument('--config_path', type=str, help='config path')
     P.add_argument('--bfm-fp', type=str, default='configs/bfm_noneck_v3.pkl')
@@ -126,15 +126,17 @@ def test_image(args):
     img = cv2.imread(args.img_path)
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
-    detected_faces = face_detector.forward(torch.tensor(img))[0]
-    detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    if img.shape[0] > 128:
+        detected_faces = face_detector.forward(torch.tensor(img))[0]
+        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    else:
+        detected_faces = [torch.tensor([0, 0, img.shape[0], img.shape[1]])]
 
     dense_model = FaceAlignment(
-        args.model_path, 
-        input_size=256, 
+        model_path=args.model_path, 
+        input_size=args.input_size, 
         device='cpu', 
-        num_classes=101
-    )
+        num_classes=args.num_classes,)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 
@@ -142,13 +144,14 @@ def test_image(args):
     # )
     processed_frame = dense_model.draw_landmarks(
         args.img_path, 
-        detected_faces=detected_faces
+        detected_faces=detected_faces,
+        draw_angles=False,
+        no_background=False
     )
 
     cv2.imshow('', processed_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
 
 # def test_full(args):
 #     """
@@ -173,6 +176,11 @@ if __name__=="__main__":
         test_video(args)
     elif args.mode == 'img':
         test_image(args)
+    elif args.mode == 'folder':
+        img_list = list(Path(args.folder_path).glob('**/*.jpg'))
+        for img_path in img_list:
+            args.img_path = str(img_path)
+            test_image(args)
     else:
         logging.error(f'Invalid mode {args.mode}')
     
