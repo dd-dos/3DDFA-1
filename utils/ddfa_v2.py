@@ -8,19 +8,23 @@ import cv2
 from .augment import ddfa_augment
 from .face3d import face3d
 import scipy.io as sio
-from .params import params_mean_101, params_std_101
 fm = face3d.face_model.FaceModel()
 
 def img_loader(path):
     return cv2.imread(path, cv2.IMREAD_COLOR)
 
 class DDFAv2_Dataset(data.Dataset):
-    def __init__(self, root, transform=None, aug=True):
-        self.root = root
+    def __init__(self, root, transform=None, aug=True, hide_face_rate=0.5, rotate_rate=0.5, vanilla_aug_rate=0.6):
+        if isinstance(root, list):
+            self.file_list = root
+        else:
+            self.file_list = list(Path(root).glob('**/*.jpg'))
         self.transform = transform
-        self.file_list = list(Path(root).glob('**/*.jpg'))
         self.img_loader = img_loader
         self.aug = aug
+        self.hide_face_rate = hide_face_rate
+        self.rotate_rate = rotate_rate
+        self.vanilla_aug_rate = vanilla_aug_rate
 
     def __len__(self):
         return len(self.file_list)
@@ -48,9 +52,17 @@ class DDFAv2_Dataset(data.Dataset):
 
         params = label['params'].reshape(101,1)
         roi_box = label['roi_box'][0]
-
+        
         if self.aug:
-            img, params = ddfa_augment(img, params, roi_box, False)
+            img, params = ddfa_augment(
+                img=img, 
+                params=params, 
+                roi_box=roi_box, 
+                all=False, 
+                hide_face_rate=self.hide_face_rate, 
+                rotate_rate=self.rotate_rate, 
+                vanilla_aug_rate=self.vanilla_aug_rate
+            )
 
         return img, params
 

@@ -337,14 +337,44 @@ def main():
     train_dataset = []
     logging.info(f'=> train_path:')
     for idx in range(len(args.train_path)):
-        train_dataset.append(
-            DDFAv2_Dataset(
-                root=args.train_path[idx],
-                transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-                aug=True
+        train_path = args.train_path[idx]
+
+        if '300VW' in train_path:
+            '''
+            file_list_0 is original face.
+            file_list_1 is generated face based on original face.
+            '''
+            file_list_0 = list(Path(train_path)).glob('**/*_0*.jpg')
+            file_list_1 = list(Path(train_path)).glob('**/*_1*.jpg')
+
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=file_list_0,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True
+                )
             )
-        )
-        logging.info(f'==> {args.train_path[idx]}: {len(train_dataset[-1])}')
+            logging.info(f'==> {args.train_path[idx]} - original: {len(train_dataset[-1])}')
+
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=file_list_1,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True,
+                    rotate_rate=0
+                )
+            )
+            logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
+        else:
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=train_path,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True,
+                )
+            )
+            logging.info(f'==> {args.train_path[idx]}: {len(train_dataset[-1])}')
+
     concat_dataset = torch.utils.data.ConcatDataset(train_dataset)
     
     val_dataset = DDFAv2_Dataset(
