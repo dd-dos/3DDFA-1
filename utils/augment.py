@@ -32,7 +32,7 @@ def ddfa_augment(img, params, roi_box, full=False):
             angles = np.linspace(0, 360, num=13)
             img, params = rotate_samples(img, params, random.choice(angles))
 
-        if np.random.rand() < 0.75:
+        if np.random.rand() < 0.60:
             img = vanilla_aug(image=img)
 
     return np.ascontiguousarray(img), params
@@ -53,9 +53,9 @@ def hide_face(img, params, roi_box):
 vanilla_aug = iaa.OneOf([
     iaa.Sometimes(0, iaa.Grayscale()),
     iaa.Grayscale(),
-    iaa.imgcorruptlike.Pixelate(severity=(1, 2)),
-    iaa.imgcorruptlike.JpegCompression(severity=(1, 2)),
-    iaa.KMeansColorQuantization(n_colors=(80, 100)),
+    iaa.imgcorruptlike.Pixelate(severity=(1, 2)),	
+    iaa.imgcorruptlike.JpegCompression(severity=(1, 2)),	
+    iaa.KMeansColorQuantization(n_colors=(80, 100)),	
     iaa.UniformColorQuantization(n_colors=(10, 15)),
     iaa.LinearContrast((1.5, 2)),
     iaa.LogContrast(gain=(0.5, 1.5)),

@@ -1,14 +1,13 @@
 import argparse
 import logging
-import sys
 from pathlib import Path
-import cv2
-from tddfa.denseface import FaceAlignment
 import torch
-import time
-import torch
-import torchvision
 
+import cv2
+import numpy as np
+import torch
+
+from tddfa.denseface import FaceAlignment
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -22,6 +21,8 @@ def argparser():
     P.add_argument('--save-path', type=str, default=None, help='path to save result')
     P.add_argument('--config_path', type=str, help='config path')
     P.add_argument('--bfm-fp', type=str, default='configs/bfm_noneck_v3.pkl')
+    P.add_argument('--input-size', type=int, default='120')
+    P.add_argument('--num-classes', type=int, default='62')
     
     args = P.parse_args()
 
@@ -59,7 +60,11 @@ def test_video(args):
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
-    dense_model = FaceAlignment(args.model_path, input_size=256, device='cpu', num_classes=101)
+    dense_model = FaceAlignment(
+        model_path=args.model_path, 
+        input_size=args.input_size, 
+        device='cpu', 
+        num_classes=args.num_classes)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -71,13 +76,22 @@ def test_video(args):
         detected_faces = face_detector.forward(torch.tensor(frame))[0]
         detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
         # frame = cv2.flip(frame, 0)
+
+        import time
         key = cv2.waitKey(1) & 0xFF
 
+        t0 = time.time()
         try:
-            processed_frame = dense_model.draw_landmarks(frame, detected_faces)
+            processed_frame = \
+                dense_model.draw_landmarks(
+                    frame, 
+                    detected_faces,
+                    draw_eyes=False,
+                    no_background=False)
         except Exception as e:
             print(e)
             processed_frame = frame
+        print(time.time()-t0)
         # processed_frame = dense_model.draw_mesh(frame)
         # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         # logging.info(f'Landmarks detection took {time.time() - time0}')
@@ -103,15 +117,17 @@ def test_image(args):
     img = cv2.imread(args.img_path)
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
-    detected_faces = face_detector.forward(torch.tensor(img))[0]
-    detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    if img.shape[0] > 128:
+        detected_faces = face_detector.forward(torch.tensor(img))[0]
+        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+    else:
+        detected_faces = [torch.tensor([0, 0, img.shape[0], img.shape[1]])]
 
     dense_model = FaceAlignment(
-        args.model_path, 
-        input_size=256, 
+        model_path=args.model_path, 
+        input_size=args.input_size, 
         device='cpu', 
-        num_classes=101
-    )
+        num_classes=args.num_classes,)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 
@@ -119,7 +135,8 @@ def test_image(args):
     # )
     processed_frame = dense_model.draw_landmarks(
         args.img_path, 
-        detected_faces=detected_faces
+        detected_faces=detected_faces,
+        no_background=False
     )
 
     cv2.imshow('', processed_frame)
