@@ -344,8 +344,8 @@ def main():
             file_list_0 is original face.
             file_list_1 is generated face based on original face.
             '''
-            file_list_0 = list(Path(train_path)).glob('**/*_0*.jpg')
-            file_list_1 = list(Path(train_path)).glob('**/*_1*.jpg')
+            file_list_0 = list(Path(train_path).glob('**/*_0*.jpg'))
+            file_list_1 = list(Path(train_path).glob('**/*_1*.jpg'))
 
             train_dataset.append(
                 DDFAv2_Dataset(

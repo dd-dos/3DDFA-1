@@ -58,7 +58,7 @@ class DDFAv2_Dataset(data.Dataset):
                 img=img, 
                 params=params, 
                 roi_box=roi_box, 
-                all=False, 
+                full=False, 
                 hide_face_rate=self.hide_face_rate, 
                 rotate_rate=self.rotate_rate, 
                 vanilla_aug_rate=self.vanilla_aug_rate
