@@ -495,8 +495,8 @@ class FaceAlignment:
 
             landmarks.append(pts_img.T)
 
-            # _, pose = estimate_pose.parse_pose(params)
-            pose = (0,0,0)
+            _, pose = estimate_pose.parse_pose(params)
+            # pose = (0,0,0)
             angles.append({
                 'yaw': pose[0] / math.pi * 180, 
                 'pitch': pose[1] / math.pi * 180,

@@ -74,34 +74,42 @@ def test_video(args):
         if not ret:
             break
         
-        detected_faces = face_detector.forward(torch.tensor(frame))[0]
-        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
         # frame = cv2.flip(frame, 0)
+        detector_info = face_detector.forward(torch.tensor(frame))
+        detected_faces = detector_info[0]
+        foo_lms = detector_info[1]
+        detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+
+        # for landmarks in foo_lms:
+        #     # points = landmarks.reshape((2,5)).T
+        #     for idx in range(5):
+        #         pts = (int(landmarks[idx].item()), int(landmarks[5+idx].item()))
+        #         cv2.circle(frame, pts, 2, (0,255,0), -1, 2)
 
         import time
         key = cv2.waitKey(1) & 0xFF
 
         t0 = time.time()
         try:
-            processed_frame = \
+            frame = \
                 dense_model.draw_landmarks(
                     frame, 
                     detected_faces,
                     draw_eyes=False,
-                    no_background=False)
+                    no_background=False,
+                    draw_angles=True)
         except Exception as e:
             print(e)
-            processed_frame = frame
         print(time.time()-t0)
         # processed_frame = dense_model.draw_mesh(frame)
         # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
-        # logging.info(f'Landmarks detection took {time.time() - time0}')
+        logging.info(f'Landmarks detection took {time.time() - t0}')
      
         if save_video:
-            result.write(processed_frame)
+            result.write(frame)
         # frame = model.get_head_pose(frame)
 
-        cv2.imshow('', processed_frame)
+        cv2.imshow('', frame)
 
         if key == ord('q'):
             break
