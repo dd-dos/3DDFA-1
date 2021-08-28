@@ -18,21 +18,21 @@ hand_folder = os.path.join(cwd, 'hand')
 hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
-def ddfa_augment(img, params, roi_box, full=False):
+def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_rate=0.5, vanilla_aug_rate=0.6):
     if full:
         img = hide_face(img, params, roi_box)
         angles = np.linspace(0, 360, num=13)
         img, params = rotate_samples(img, params, random.choice(angles))
         img = vanilla_aug(image=img)
     else:
-        if np.random.rand() < 0.5:
+        if np.random.rand() < hide_face_rate:
             img = hide_face(img, params, roi_box)
 
-        if np.random.rand() < 0.5:
+        if np.random.rand() < rotate_rate:
             angles = np.linspace(0, 360, num=13)
             img, params = rotate_samples(img, params, random.choice(angles))
 
-        if np.random.rand() < 0.60:
+        if np.random.rand() < vanilla_aug_rate:
             img = vanilla_aug(image=img)
 
     return np.ascontiguousarray(img), params
@@ -57,9 +57,9 @@ vanilla_aug = iaa.OneOf([
     iaa.imgcorruptlike.JpegCompression(severity=(1, 2)),	
     iaa.KMeansColorQuantization(n_colors=(80, 100)),	
     iaa.UniformColorQuantization(n_colors=(10, 15)),
-    iaa.LinearContrast((1.5, 2)),
+    iaa.LinearContrast((1.2,1.7)),
     iaa.LogContrast(gain=(0.5, 1.5)),
-    iaa.SigmoidContrast(gain=7, cutoff=(0.4, 0.6)),
+    iaa.SigmoidContrast(gain=7, cutoff=(0.4, 0.5)),
     iaa.AdditivePoissonNoise((10, 15), per_channel=True),
     iaa.AdditivePoissonNoise((10, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15)),

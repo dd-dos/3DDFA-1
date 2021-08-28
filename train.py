@@ -1,3 +1,4 @@
+from torch import optim
 from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter()
@@ -29,11 +30,12 @@ from datetime import datetime
 import os
 
 lr = None
-LOSS = 0.
+WPDC_LOSS = 0.
+VDC_LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Adam-CyclicCosineDecayLR")
+task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Face-up-Adam")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
@@ -50,9 +52,7 @@ def parse_args():
     parser.add_argument('--print-freq', '-p', default=20, type=int)
     parser.add_argument('--resume', default='', type=str, metavar='PATH')
     parser.add_argument('--devices-id', default='0,1', type=str)
-    parser.add_argument('--train-1', default='', type=str)
-    parser.add_argument('--train-2', default='', type=str)
-    parser.add_argument('--train-3', default='', type=str)
+    parser.add_argument('--train-path', nargs="+", default=["a", "b"])
     parser.add_argument('--val-path', default='', type=str)
 
     parser.add_argument('--snapshot', default='', type=str)
@@ -118,9 +118,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             
             data_time.update(time.time() - end)
             wpdc_loss_value = wpdc_loss(output, target)
-            vdc_loss_value = vdc_loss(output, target)
-            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
-            # total_loss = wpdc_loss_value
+            # vdc_loss_value = vdc_loss(output, target)
+            # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            total_loss = wpdc_loss_value
             losses.update(total_loss)
 
             if use_amp:
@@ -153,7 +153,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
                          f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-            log_training_samples(input[:32], output[:32], target[:32], writer, ITER, 'Train/End-logging-step')
+            log_training_samples(input[:64], output[:64], target[:64], writer, ITER, 'Train/End-logging-step')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
             random_bullshit.go(writer, ITER, 'Train')
 
@@ -164,13 +164,15 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             target = top_loss_samples['target']
             output = top_loss_samples['output'] 
 
-            log_training_samples(input[:32], output[:32], target[:32], writer, ITER, 'Train/Top-loss')
+            log_training_samples(input[:64], output[:64], target[:64], writer, ITER, 'Train/Top-loss')
 
         ITER += 1
 
 
-def validate(val_loader, model, epoch):
-    global LOSS
+def validate(val_loader, model, epoch, optimizer):
+    global WPDC_LOSS
+    global VDC_LOSS
+
     model.eval()
     use_amp = args.use_amp
     end = time.time()
@@ -180,9 +182,10 @@ def validate(val_loader, model, epoch):
     with torch.no_grad():
         vdc_losses = AverageMeter()
         wpdc_losses = AverageMeter()
-        losses = AverageMeter()
         random_bullshit = RandomBullShit()
-        top_loss = 0
+        top_wpdc_loss = 0
+        top_vdc_loss = 0
+
         with torch.cuda.amp.autocast(enabled=use_amp):
             for i, (input, target) in enumerate(val_loader):
                 target.requires_grad = False
@@ -197,22 +200,21 @@ def validate(val_loader, model, epoch):
 
                 random_bullshit.update(output.cuda(), target)
 
-                if args.loss.lower() == 'wpdc':
-                    if wpdc_loss.item() >= top_loss:
-                        top_loss = wpdc_loss.item()
-                        top_loss_samples = {
-                            'input': input,
-                            'target': target,
-                            'output': output
-                        }
-                else:
-                    if vdc_loss.item() >= top_loss:
-                        top_loss = vdc_loss.item()
-                        top_loss_samples = {
-                            'input': input,
-                            'target': target,
-                            'output': output
-                        }
+                if wpdc_loss.item() >= top_wpdc_loss:
+                    top_wpdc_loss = wpdc_loss.item()
+                    top_wpdc_loss_samples = {
+                        'input': input,
+                        'target': target,
+                        'output': output
+                    }
+
+                if vdc_loss.item() >= top_vdc_loss:
+                    top_vdc_loss = vdc_loss.item()
+                    top_vdc_loss_samples = {
+                        'input': input,
+                        'target': target,
+                        'output': output
+                    }
 
         elapse = time.time() - end
         logging.info(f'Val: [{epoch}][{len(val_loader)}]\t'
@@ -227,38 +229,71 @@ def validate(val_loader, model, epoch):
         '''
         Log top-loss samples.
         '''
-        input = top_loss_samples['input']
-        target = top_loss_samples['target']
-        output = top_loss_samples['output']
+        log_training_samples(
+            top_wpdc_loss_samples['input'], 
+            top_wpdc_loss_samples['output'], 
+            top_wpdc_loss_samples['target'], 
+            writer, 
+            ITER, 
+            'Val/Top-WPDC-loss'
+        )
+        writer.add_scalar('Top-WPDC-loss/Val', top_wpdc_loss, ITER)
 
-        log_training_samples(input, output, target, writer, ITER, 'Val/Top-loss')
-        writer.add_scalar('Top-loss/Val', top_loss, ITER)
+        log_training_samples(
+            top_vdc_loss_samples['input'], 
+            top_vdc_loss_samples['output'], 
+            top_vdc_loss_samples['target'], 
+            writer, 
+            ITER, 
+            'Val/Top-VDC-loss'
+        )
+        writer.add_scalar('Top-VDC-loss/Val', top_vdc_loss, ITER)
 
-        losses = vdc_losses
-        if args.loss.lower() == 'wpdc':
-            losses = wpdc_losses
 
         if epoch==0:
-            LOSS=losses.avg
+            WPDC_LOSS=wpdc_losses.avg
+            VDC_LOSS=vdc_losses.avg
         else:
-            if losses.avg <= LOSS:
-                LOSS = losses.avg
-                filename = f'snapshot/{TODAY}/best.pth.tar'
+            if wpdc_losses.avg <= WPDC_LOSS:
+                WPDC_LOSS = wpdc_losses.avg
+                filename = f'snapshot/{TODAY}/wpdc_best.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        # 'optimizer': optimizer.state_dict()
+                        'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
             else:
-                filename = f'snapshot/{TODAY}/last.pth.tar'
+                filename = f'snapshot/{TODAY}/wpdc_last.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        # 'optimizer': optimizer.state_dict()
+                        'optimizer': optimizer.state_dict()
+                    },
+                    filename
+                )
+            
+            if vdc_losses.avg <= VDC_LOSS:
+                VDC_LOSS = vdc_losses.avg
+                filename = f'snapshot/{TODAY}/vdc_best.pth.tar'
+                save_checkpoint(
+                    {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict()
+                    },
+                    filename
+                )
+            else:
+                filename = f'snapshot/{TODAY}/vdc_last.pth.tar'
+                save_checkpoint(
+                    {
+                        'epoch': epoch,
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
@@ -297,37 +332,58 @@ def main():
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
 
-    train_dataset_1 = DDFAv2_Dataset(
-        root=args.train_1,
-        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-        aug=True
-    )
+    logging.info(f'Number of samples: ')
 
-    train_dataset_2 = DDFAv2_Dataset(
-        root=args.train_2,
-        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-        aug=True
-    )
+    train_dataset = []
+    logging.info(f'=> train_path:')
+    for idx in range(len(args.train_path)):
+        train_path = args.train_path[idx]
 
-    train_dataset_3 = DDFAv2_Dataset(
-        root=args.train_3,
-        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-        aug=True
-    )
+        if '300VW' in train_path:
+            '''
+            file_list_0 is original face.
+            file_list_1 is generated face based on original face.
+            '''
+            file_list_0 = list(Path(train_path).glob('**/*_0*.jpg'))
+            file_list_1 = list(Path(train_path).glob('**/*_1*.jpg'))
+
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=file_list_0,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True
+                )
+            )
+            logging.info(f'==> {args.train_path[idx]} - original: {len(train_dataset[-1])}')
+
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=file_list_1,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True,
+                    rotate_rate=0
+                )
+            )
+            logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
+        else:
+            train_dataset.append(
+                DDFAv2_Dataset(
+                    root=train_path,
+                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                    aug=True,
+                )
+            )
+            logging.info(f'==> {args.train_path[idx]}: {len(train_dataset[-1])}')
+
+    concat_dataset = torch.utils.data.ConcatDataset(train_dataset)
     
     val_dataset = DDFAv2_Dataset(
         root=args.val_path,
         transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
         aug=False
     )
-
-    logging.info(f'Number of samples: ')
-    logging.info(f'=> {args.train_1}: {len(train_dataset_1)}')
-    logging.info(f'=> {args.train_2}: {len(train_dataset_2)}')
-    logging.info(f'=> {args.train_3}: {len(train_dataset_3)}')
     logging.info(f'=> {args.val_path}: {len(val_dataset)}')
 
-    concat_dataset = torch.utils.data.ConcatDataset([train_dataset_1, train_dataset_2, train_dataset_3])
     train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
                               shuffle=True, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
@@ -357,10 +413,13 @@ def main():
     vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
 
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
-
+    
+    logging.info('=> Init loss.')
+    validate(val_loader, model, 0, optimizer)
+    
     for epoch in range(args.epochs):
         train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler)
-        validate(val_loader, model, epoch)
+        validate(val_loader, model, epoch, optimizer)
 
         if args.use_scheduler:
             scheduler.step()

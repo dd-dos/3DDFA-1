@@ -42,7 +42,8 @@ from pathlib import Path
 import scipy.io as sio
 file_list = list(Path('data/300VW-3D_cropped_closed_eyes_3ddfa').glob('**/*.mat')) + \
             list(Path('data/300WLP_3ddfa').glob('**/*.mat')) + \
-            list(Path('data/300VW-3D_cropped_non_closed_eyes_3ddfa').glob('**/*.mat'))
+            list(Path('data/300VW-3D_cropped_opened_eyes_3ddfa').glob('**/*.mat')) + \
+            list(Path('data/300WLP_3ddfa').glob('**/*.mat'))
             
 for file_path in tqdm.tqdm(file_list, total=len(file_list)):
     params = sio.loadmat(file_path)['params']
