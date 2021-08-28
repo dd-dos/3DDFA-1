@@ -96,8 +96,8 @@ class FaceAlignment:
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
             # show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)
-            # ori_inp = inp.copy()
-            # cv2.imwrite('inp.jpg', ori_inp)
+            ori_inp = inp.copy()
+            cv2.imwrite('inp.jpg', ori_inp)
             inp = self.transformer(inp)
             inp = inp.to(self.device)
             inp.unsqueeze_(0)
@@ -482,7 +482,7 @@ class FaceAlignment:
             if self.input_size == 256 or self.input_size == 128:
                 vertex = fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[fm.bfm.kpt_ind][:,:2].T
             else:
-                vertex = ddfa.reconstruct_vertex(params)
+                vertex = ddfa.reconstruct_vertex(params, dense=True)
 
             # from face3d import face_model
             # fm = face_model.FaceModel('examples/Data/BFM/Out/BFM.mat')
