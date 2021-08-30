@@ -70,10 +70,11 @@ def parse_args():
     parser.add_argument('--use-amp', action='store_true')
     parser.add_argument('--use-scheduler', action='store_true')
     parser.add_argument('--scheduler-init-decay-epoch', default=10, type=int)
-    parser.add_argument('--scheduler-min-decay-lr', default=1e-6, type=float)
-    parser.add_argument('--scheduler-restart-interval', default=3, type=float)
-    parser.add_argument('--scheduler-restart-lr', default=1e-4, type=float)
+    parser.add_argument('--scheduler-min-decay-lr', default=1e-7, type=float)
+    parser.add_argument('--scheduler-restart-interval', default=5, type=float)
+    parser.add_argument('--scheduler-restart-lr', default=1e-5, type=float)
     parser.add_argument('--optimizer', default='adam', type=str)
+    parser.add_argument('--num-log-samples', default=32, type=int, help='number of samples for logging')
 
     global args
     args = parser.parse_args()
@@ -118,9 +119,9 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             
             data_time.update(time.time() - end)
             wpdc_loss_value = wpdc_loss(output, target)
-            # vdc_loss_value = vdc_loss(output, target)
-            # total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
-            total_loss = wpdc_loss_value
+            vdc_loss_value = vdc_loss(output, target)
+            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
+            # total_loss = wpdc_loss_value
             losses.update(total_loss)
 
             if use_amp:
@@ -153,7 +154,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
                          f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-            log_training_samples(input[:64], output[:64], target[:64], writer, ITER, 'Train/End-logging-step')
+            log_training_samples(input[:args.num_log_samples], output[:args.num_log_samples], target[:args.num_log_samples], writer, ITER, 'Train/End-logging-step')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
             random_bullshit.go(writer, ITER, 'Train')
 
@@ -164,7 +165,7 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             target = top_loss_samples['target']
             output = top_loss_samples['output'] 
 
-            log_training_samples(input[:64], output[:64], target[:64], writer, ITER, 'Train/Top-loss')
+            log_training_samples(input[:args.num_log_samples], output[:args.num_log_samples], target[:args.num_log_samples], writer, ITER, 'Train/Top-loss')
 
         ITER += 1
 
@@ -230,9 +231,9 @@ def validate(val_loader, model, epoch, optimizer):
         Log top-loss samples.
         '''
         log_training_samples(
-            top_wpdc_loss_samples['input'], 
-            top_wpdc_loss_samples['output'], 
-            top_wpdc_loss_samples['target'], 
+            top_wpdc_loss_samples['input'][:args.num_log_samples], 
+            top_wpdc_loss_samples['output'][:args.num_log_samples], 
+            top_wpdc_loss_samples['target'][:args.num_log_samples], 
             writer, 
             ITER, 
             'Val/Top-WPDC-loss'
@@ -240,9 +241,9 @@ def validate(val_loader, model, epoch, optimizer):
         writer.add_scalar('Top-WPDC-loss/Val', top_wpdc_loss, ITER)
 
         log_training_samples(
-            top_vdc_loss_samples['input'], 
-            top_vdc_loss_samples['output'], 
-            top_vdc_loss_samples['target'], 
+            top_vdc_loss_samples['input'][:args.num_log_samples], 
+            top_vdc_loss_samples['output'][:args.num_log_samples], 
+            top_vdc_loss_samples['target'][:args.num_log_samples], 
             writer, 
             ITER, 
             'Val/Top-VDC-loss'
@@ -340,31 +341,43 @@ def main():
         train_path = args.train_path[idx]
 
         if '300VW' in train_path:
-            '''
-            file_list_0 is original face.
-            file_list_1 is generated face based on original face.
-            '''
-            file_list_0 = list(Path(train_path).glob('**/*_0*.jpg'))
-            file_list_1 = list(Path(train_path).glob('**/*_1*.jpg'))
+            if 'opened_eyes' not in train_path:
+                '''
+                file_list_0 is original face.
+                file_list_1 is generated face based on original face.
+                '''
+                file_list_0 = list(Path(train_path).glob('**/*_0.jpg'))
+                file_list_1 = list(Path(train_path).glob('**/*_1.jpg'))
 
-            train_dataset.append(
-                DDFAv2_Dataset(
-                    root=file_list_0,
-                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-                    aug=True
+                train_dataset.append(
+                    DDFAv2_Dataset(
+                        root=file_list_0,
+                        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                        aug=True
+                    )
                 )
-            )
-            logging.info(f'==> {args.train_path[idx]} - original: {len(train_dataset[-1])}')
+                logging.info(f'==> {args.train_path[idx]} - original: {len(train_dataset[-1])}')
 
-            train_dataset.append(
-                DDFAv2_Dataset(
-                    root=file_list_1,
-                    transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-                    aug=True,
-                    rotate_rate=0
+                train_dataset.append(
+                    DDFAv2_Dataset(
+                        root=file_list_1,
+                        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                        aug=True,
+                        rotate_rate=0
+                    )
                 )
-            )
-            logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
+                logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
+            else:
+                file_list_1 = list(Path(train_path).glob('**/*_1.jpg'))
+                train_dataset.append(
+                    DDFAv2_Dataset(
+                        root=file_list_1,
+                        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
+                        aug=True,
+                        rotate_rate=0
+                    )
+                )
+                logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
         else:
             train_dataset.append(
                 DDFAv2_Dataset(
@@ -402,10 +415,10 @@ def main():
 
     if args.use_scheduler:
         scheduler = CyclicCosineDecayLR(optimizer, 
-                                    init_decay_epochs=args.init_decay_epochs,
-                                    min_decay_lr=args.min_decay_lr,
-                                    restart_interval =args.restart_interval,
-                                    restart_lr=args.restart_lr)
+                                    init_decay_epochs=args.scheduler_init_decay_epoch,
+                                    min_decay_lr=args.scheduler_min_decay_lr,
+                                    restart_interval =args.scheduler_restart_interval,
+                                    restart_lr=args.scheduler_restart_lr)
 
     global lr
     lr = args.base_lr
