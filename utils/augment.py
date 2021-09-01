@@ -1,7 +1,6 @@
 from utils.face3d.face3d.utils import show_vertices
 import imgaug.augmenters as iaa
 import numpy as np
-from .params import *
 import math
 import cv2
 from scipy import ndimage

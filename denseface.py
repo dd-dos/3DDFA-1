@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision
-from utils import ddfa, estimate_pose, imutils
+from utils import estimate_pose, imutils
 from utils.face3d import face3d
 fm = face3d.face_model.FaceModel()
 from utils.face3d.face3d.utils import *
@@ -51,8 +51,8 @@ class FaceAlignment:
         # self.dense_face_model.fc = torch.nn.Linear(1024, 89)
 
         self.transformer = torchvision.transforms.Compose([
-            ddfa.ToTensorGjz(),
-            ddfa.NormalizeGjz(mean=127.5, std=128)
+            imutils.ToTensorGjz(),
+            imutils.NormalizeGjz(mean=127.5, std=128)
         ])
 
         self.device = device
@@ -481,14 +481,8 @@ class FaceAlignment:
             length = extra_list[idx]['length']
             pad = extra_list[idx]['pad']
 
-            if self.input_size == 256 or self.input_size == 128:
-                vertex = fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[fm.bfm.kpt_ind][:,:2].T
-            else:
-                vertex = ddfa.reconstruct_vertex(params, dense=True)
+            vertex = fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[fm.bfm.kpt_ind][:,:2].T
 
-            # from face3d import face_model
-            # fm = face_model.FaceModel('examples/Data/BFM/Out/BFM.mat')
-            # vertex = fm.reconstruct_vertex(np.zeros((120,120,3)), params)[fm.bfm.kpt_ind]
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
             # De-pad

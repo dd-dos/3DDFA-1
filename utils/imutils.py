@@ -1,5 +1,5 @@
-from cv2 import CAP_PROP_PVAPI_PIXELFORMAT
 import numpy as np
+import torch
 
 def crop_balance(img, detected_face, expand_ratio=1):
     # det = detected_face.numpy().copy()
@@ -51,3 +51,22 @@ def cropped_to_orginal(pts, length, center, resize):
     coord_original_cropped_pts[1] += center[1]-length/2
 
     return coord_original_cropped_pts
+
+class ToTensorGjz(object):
+    def __call__(self, pic):
+        if isinstance(pic, np.ndarray):
+            img = torch.from_numpy(pic.transpose((2, 0, 1)))
+            return img.float()
+
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
+
+class NormalizeGjz(object):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor):
+        tensor.sub_(self.mean).div_(self.std)
+        return tensor
