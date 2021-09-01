@@ -79,9 +79,7 @@ class VDCLoss(nn.Module):
 
         # resample index
         index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
-        # keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
-        keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1)
-
+        keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
         keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
         w_shp_base = self.w_shp[keypoints_mix]
         u_base = self.u[keypoints_mix]

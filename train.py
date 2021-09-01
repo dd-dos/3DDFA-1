@@ -64,15 +64,15 @@ def parse_args():
                         choices=arch_choices)
     parser.add_argument('--frozen', default='false', type=str2bool)
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
-    parser.add_argument('--resample-num', default=132, type=int)
+    parser.add_argument('--resample-num', default=0, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
     parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
     parser.add_argument('--use-amp', action='store_true')
     parser.add_argument('--use-scheduler', action='store_true')
     parser.add_argument('--scheduler-init-decay-epoch', default=10, type=int)
-    parser.add_argument('--scheduler-min-decay-lr', default=1e-7, type=float)
+    parser.add_argument('--scheduler-min-decay-lr', default=1e-6, type=float)
     parser.add_argument('--scheduler-restart-interval', default=5, type=float)
-    parser.add_argument('--scheduler-restart-lr', default=1e-5, type=float)
+    parser.add_argument('--scheduler-restart-lr', default=1e-4, type=float)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--num-log-samples', default=32, type=int, help='number of samples for logging')
 
@@ -91,7 +91,7 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
 
 
 ITER = 0
-def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
+def train(train_loader, model, optimizer, epoch, scaler):
     global ITER
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -107,6 +107,8 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
     top_loss = 0
     end = time.time()
 
+    wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
+    vdc_criterion = VDCLoss(opt_style=args.opt_style, resample_num=args.resample_num).cuda()
     model.train()
     for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
         optimizer.zero_grad()
@@ -118,10 +120,15 @@ def train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler):
             output = model(input)
             
             data_time.update(time.time() - end)
-            wpdc_loss_value = wpdc_loss(output, target)
-            vdc_loss_value = vdc_loss(output, target)
-            total_loss = args.beta*wpdc_loss_value + (1-args.beta)*vdc_loss_value*(2e-2)
-            # total_loss = wpdc_loss_value
+            if args.loss == 'wpdc':
+                total_loss = wpdc_criterion(output, target)
+            elif args.loss == 'vdc':
+                total_loss = vdc_criterion(output, target)
+            else:
+                wpdc_loss = wpdc_criterion(output, target)
+                vdc_loss = vdc_criterion(output, target)
+                total_loss = args.beta*wpdc_loss + (1-args.beta)*vdc_loss*(7e-2)
+
             losses.update(total_loss)
 
             if use_amp:
@@ -178,7 +185,7 @@ def validate(val_loader, model, epoch, optimizer):
     use_amp = args.use_amp
     end = time.time()
     wpdc_criterion = WPDCLoss(opt_style=args.opt_style).cuda()
-    vdc_criterion = VDCLoss(opt_style=args.opt_style).cuda()
+    vdc_criterion = VDCLoss(opt_style=args.opt_style, resample_num=args.resample_num).cuda()
 
     with torch.no_grad():
         vdc_losses = AverageMeter()
@@ -422,16 +429,14 @@ def main():
 
     global lr
     lr = args.base_lr
-    wpdc_loss = WPDCLoss(opt_style=args.opt_style).cuda() 
-    vdc_loss = VDCLoss(opt_style=args.opt_style).cuda()
 
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     
     logging.info('=> Init loss.')
     validate(val_loader, model, 0, optimizer)
     
-    for epoch in range(args.epochs):
-        train(train_loader, model, wpdc_loss, vdc_loss, optimizer, epoch, scaler)
+    for epoch in range(1, args.epochs):
+        train(train_loader, model, optimizer, epoch, scaler)
         validate(val_loader, model, epoch, optimizer)
 
         if args.use_scheduler:

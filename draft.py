@@ -1,10 +1,3 @@
-from utils.ddfa_v2 import DDFAv2_Dataset
-from utils.ddfa import ToTensorGjz, NormalizeGjz
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-import tqdm
-import os
-import shutil
 import cv2
 import numpy as np
 from utils.augment import n_rotate_vertex
