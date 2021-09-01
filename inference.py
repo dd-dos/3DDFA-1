@@ -66,7 +66,7 @@ def test_video(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.)
+        expand_ratio=1.2)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -80,6 +80,8 @@ def test_video(args):
         detected_faces = detector_info[0]
         foo_lms = detector_info[1]
         detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
+        print(f'frame shape: {frame.shape}')
+        print(f'detected faces: {detected_faces}')
 
         # for landmarks in foo_lms:
         #     # points = landmarks.reshape((2,5)).T
@@ -91,7 +93,13 @@ def test_video(args):
         key = cv2.waitKey(1) & 0xFF
 
         t0 = time.time()
-
+        # frame = \
+        #     dense_model.draw_landmarks(
+        #         frame, 
+        #         detected_faces,
+        #         draw_eyes=False,
+        #         no_background=False,
+        #         draw_angles=True)
         try:
             frame = \
                 dense_model.draw_landmarks(
@@ -112,6 +120,7 @@ def test_video(args):
         # frame = model.get_head_pose(frame)
 
         cv2.imshow('', frame)
+        # cv2.waitKey(0)
 
         if key == ord('q'):
             break
