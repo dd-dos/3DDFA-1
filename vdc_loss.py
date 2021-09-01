@@ -6,10 +6,11 @@ import torch.nn as nn
 from utils.io import _load, _numpy_to_cuda, _numpy_to_tensor
 from utils.params import keypoints
 from utils.face3d.face3d.face_model import FaceModel
+from utils.face3d.utils import show_vertices
 fm = FaceModel()
 
-_to_tensor = _numpy_to_cuda  # gpu
-
+# _to_tensor = _numpy_to_cuda  # gpu
+_to_tensor = _numpy_to_tensor
 
 def parse_param_batch(param):
     """Work for both numpy and tensor"""
@@ -23,7 +24,7 @@ def parse_param_batch(param):
 
 
 class VDCLoss(nn.Module):
-    def __init__(self, opt_style='all'):
+    def __init__(self, opt_style='all', resample_num=0):
         super(VDCLoss, self).__init__()
 
         # self.u = _to_tensor(u)
@@ -44,6 +45,7 @@ class VDCLoss(nn.Module):
         self.w_shp_length = self.w_shp.shape[0] // 3
 
         self.opt_style = opt_style
+        self.resample_num = resample_num
 
     def reconstruct_and_parse(self, input, target):
         # reconstruct
@@ -71,13 +73,15 @@ class VDCLoss(nn.Module):
         loss = torch.mean(diff)
         return loss
 
-    def forward_resample(self, input, target, resample_num=132):
+    def forward_resample(self, input, target):
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
         # resample index
-        index = torch.randperm(self.w_shp_length)[:resample_num].reshape(-1, 1)
-        keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
+        index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
+        # keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
+        keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1)
+
         keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
         w_shp_base = self.w_shp[keypoints_mix]
         u_base = self.u[keypoints_mix]
@@ -87,12 +91,14 @@ class VDCLoss(nn.Module):
 
         N = input.shape[0]
         # import ipdb; ipdb.set_trace(context=10)
-        with torch.cuda.amp.autocast(enabled=False):
-            gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
-                .view(N, -1, 3).permute(0, 2, 1) + offsetg
-            vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
-                .view(N, -1, 3).permute(0, 2, 1) + offset
+        # with torch.cuda.amp.autocast(enabled=False):
+        gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
+            .view(N, -1, 3).permute(0, 2, 1) + offsetg
+        vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
+            .view(N, -1, 3).permute(0, 2, 1) + offset
 
+        show_vertices(gt_vertex, '3D')
+        import ipdb; ipdb.set_trace(context=10)
         diff = (gt_vertex - vertex) ** 2
         loss = torch.mean(diff)
         return loss

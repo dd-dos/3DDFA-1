@@ -92,7 +92,9 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
+            print(f'padded image shape: {padded_img.shape}')
             cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=self.expand_ratio)
+            print(f'cropeed image shape: {cropped_inp.shape}')
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
             # show_ndarray_img(inp)
             # import ipdb; ipdb.set_trace(context=10)
@@ -495,12 +497,18 @@ class FaceAlignment:
 
             landmarks.append(pts_img.T)
 
-            _, pose = estimate_pose.parse_pose(params)
+            # _, pose = estimate_pose.parse_pose(params)
+            _,_,_,pose,_= fm._parse_params(params)
             # pose = (0,0,0)
+            # angles.append({
+            #     'yaw': pose[0] / math.pi * 180, 
+            #     'pitch': pose[1] / math.pi * 180,
+            #     'roll': pose[2] / math.pi * 180,
+            # })
             angles.append({
-                'yaw': pose[0] / math.pi * 180, 
-                'pitch': pose[1] / math.pi * 180,
-                'roll': pose[2] / math.pi * 180,
+                'yaw': pose[0], 
+                'pitch': pose[1],
+                'roll': pose[2],
             })
 
         return landmarks, angles
