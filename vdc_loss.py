@@ -23,7 +23,7 @@ def parse_param_batch(param):
 
 
 class VDCLoss(nn.Module):
-    def __init__(self, opt_style='all'):
+    def __init__(self, opt_style='all', resample_num=0):
         super(VDCLoss, self).__init__()
 
         # self.u = _to_tensor(u)
@@ -44,6 +44,8 @@ class VDCLoss(nn.Module):
         self.w_shp_length = self.w_shp.shape[0] // 3
 
         self.opt_style = opt_style
+        self.resample_num = resample_num
+
 
     def reconstruct_and_parse(self, input, target):
         # reconstruct
@@ -71,12 +73,12 @@ class VDCLoss(nn.Module):
         loss = torch.mean(diff)
         return loss
 
-    def forward_resample(self, input, target, resample_num=132):
+    def forward_resample(self, input, target):
         (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg) \
             = self.reconstruct_and_parse(input, target)
 
         # resample index
-        index = torch.randperm(self.w_shp_length)[:resample_num].reshape(-1, 1)
+        index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
         keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
         keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
         w_shp_base = self.w_shp[keypoints_mix]
