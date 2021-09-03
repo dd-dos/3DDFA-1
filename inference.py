@@ -66,7 +66,7 @@ def test_video(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.2)
+        expand_ratio=1.3)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -147,7 +147,8 @@ def test_image(args):
         model_path=args.model_path, 
         input_size=args.input_size, 
         device='cpu', 
-        num_classes=args.num_classes,)
+        num_classes=args.num_classes,
+        expand_ratio=1.5)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 

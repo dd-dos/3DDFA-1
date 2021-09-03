@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-def crop_balance(img, detected_face, expand_ratio=1):
+def crop_balance(img, detected_face, expand_ratio=1, shift=0.15):
     # det = detected_face.numpy().copy()
     
     # box_width = det[2]-det[0]
@@ -20,11 +20,15 @@ def crop_balance(img, detected_face, expand_ratio=1):
     # # Crop image and adjust center
     # cropped_img = img[y1:y2, x1:x2]
 
-    left, top, right, bottom, _ = detected_face
+    if len(detected_face) == 5:
+        left, top, right, bottom, _ = detected_face
+    else:
+        left, top, right, bottom = detected_face
+
     old_size = (right - left + bottom - top) / 2
     center_x = right - (right - left) / 2.0
-    center_y = bottom - (bottom - top) / 2.0 + old_size * 0.14
-    size = int(old_size * 1.2)
+    center_y = bottom - (bottom - top) / 2.0 + old_size * shift
+    size = int(old_size * expand_ratio)
     roi_box = [0] * 4
     roi_box[0] = int(center_x - size / 2)
     roi_box[1] = int(center_y - size / 2)
