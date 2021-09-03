@@ -42,3 +42,6 @@ densefacelib
 test.jpg
 *.tar.gz
 data
+*.mov
+*.mp4
+inp.jpg
