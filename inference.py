@@ -148,7 +148,7 @@ def test_image(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.5)
+        expand_ratio=1.)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 
