@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch.utils.data as data
 import cv2
-from .augment import ddfa_augment
+from .augment import ddfa_augment, random_crop
 from .face3d import face3d
 import scipy.io as sio
 fm = face3d.face_model.FaceModel()
@@ -53,6 +53,8 @@ class DDFAv2_Dataset(data.Dataset):
         params = label['params'].reshape(101,1)
         roi_box = label['roi_box'][0]
         
+        img, params = random_crop(img, roi_box, params, target_size=128)
+
         if self.aug:
             img, params = ddfa_augment(
                 img=img, 

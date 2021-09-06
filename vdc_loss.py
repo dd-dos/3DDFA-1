@@ -4,7 +4,6 @@
 import torch
 import torch.nn as nn
 from utils.io import _load, _numpy_to_cuda, _numpy_to_tensor
-from utils.params import keypoints
 from utils.face3d.face3d.face_model import FaceModel
 from utils.face3d.utils import show_vertices
 fm = FaceModel()
@@ -37,7 +36,7 @@ class VDCLoss(nn.Module):
         self.w_shp = _to_tensor(fm.bfm.model['shapePC'][:,:60])
         self.w_exp = _to_tensor(fm.bfm.model['expPC'][:,:29])
 
-        self.keypoints = _to_tensor(keypoints)
+        self.keypoints = _to_tensor(fm.bfm.keypoints)
         self.u_base = self.u[self.keypoints]
         self.w_shp_base = self.w_shp[self.keypoints]
         self.w_exp_base = self.w_exp[self.keypoints]

@@ -2,19 +2,17 @@ import cv2
 import numpy as np
 from utils.augment import n_rotate_vertex
 from vdc_loss import VDCLoss
+import scipy.io as sio
+from utils.augment import shift
+from utils.face3d.face3d.face_model import FaceModel
+from utils.face3d.utils import show_pts
+
+fm = FaceModel()
 
 if __name__=='__main__':
-    shutil.rmtree('input_samples', ignore_errors=True)
-    os.makedirs('input_samples', exist_ok=True)
-    dataset = DDFAv2_Dataset(
-        'data',
-        transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
-    )
+    img = cv2.imread('data/0560_0_fliplr.jpg')
+    params = sio.loadmat('data/0560_0_fliplr.mat')['params']
 
-    train_loader = DataLoader(dataset, batch_size=1, num_workers=0,
-                            shuffle=True, pin_memory=True, drop_last=False)
-
-    vdc_loss = VDCLoss(opt_style='resample')
-
-    for input, target in tqdm.tqdm(train_loader, total=len(train_loader)):
-        loss = vdc_loss(target, target)
+    s_img, s_params = shift(img, params.reshape(-1,), (20, 40))
+    re_pts = fm.reconstruct_vertex(s_img, s_params.reshape(-1,), False)[fm.bfm.kpt_ind]
+    show_pts(s_img, re_pts)

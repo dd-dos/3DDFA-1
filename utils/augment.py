@@ -34,17 +34,18 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
         if np.random.rand() < vanilla_aug_rate:
             img = vanilla_aug(image=img)
 
+        if np.random.rand() < 0.5:
+            img, params = flip(img, params)
+
     return np.ascontiguousarray(img), params
 
 
-def hide_face(img, params, roi_box):
+def hide_face(img, roi_box):
     rate = np.random.rand()
-    if rate < 0.3:
+    if rate < 0.4:
         img = hand_face(img, roi_box)
-    elif 0.3 <= rate < 0.6:
+    elif 0.4 <= rate < 0.8:
         img = crop_range(img, ratio=1/3)
-    else:
-        img, params = random_shift(img, params)
 
     return img
 
@@ -89,14 +90,14 @@ def n_rotate_vertex(img, params, angle):
     offset = np.ascontiguousarray(offset)
     
     rad_angle = angle / 180 * math.pi
-    rotate_matrix = np.array([
+    rotation_matrix = np.array([
         [np.cos(rad_angle), -np.sin(rad_angle), 0.],
         [np.sin(rad_angle), np.cos(rad_angle), 0.],
         [0., 0., 1.]
     ], dtype=np.float64)
     
     center_old = np.array([img_width/2, img_height/2, 1], dtype=np.float64)
-    center_new = rotate_matrix @ center_old
+    center_new = rotation_matrix @ center_old
     rotate_offset = center_old-center_new
     rotate_offset = rotate_offset.reshape(3,)
     
@@ -111,15 +112,15 @@ def n_rotate_vertex(img, params, angle):
 
     # trans_v = vertex @ p.T + offset.reshape(3,) + norm_trans
     # flip_v = trans_v @ flip_matrix.T + flip_offset
-    # rot_v = flip_v @ rotate_matrix.T + rotate_offset
+    # rot_v = flip_v @ rotation_matrix.T + rotate_offset
     
-    # new_p = (p.T @ flip_matrix.T @ rotate_matrix.T).T
-    # new_offset = ((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotate_matrix.T + rotate_offset
+    # new_p = (p.T @ flip_matrix.T @ rotation_matrix.T).T
+    # new_offset = ((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotation_matrix.T + rotate_offset
     
     # new_all = vertex @ new_p.T + new_offset
     #################################################
-    new_p = flip_matrix @ rotate_matrix @ flip_matrix @ p
-    new_offset = (((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotate_matrix.T + rotate_offset - \
+    new_p = flip_matrix @ rotation_matrix @ flip_matrix @ p
+    new_offset = (((offset.reshape(3,) + norm_trans) @ flip_matrix.T + flip_offset) @ rotation_matrix.T + rotate_offset - \
                 flip_offset) @ flip_matrix - norm_trans
 
     new_camera_matrix = np.concatenate((new_p, new_offset.reshape(3,1)), axis=1)
@@ -305,3 +306,138 @@ def shift(img, params, shift_value=(10,10)):
     params[7] += shift_value[1]
 
     return new_img, params
+
+@numba.njit()
+def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128):
+    camera_matrix = params[:12].reshape(3, -1)
+
+    trans = camera_matrix[:, 3]
+    R1 = camera_matrix[0:1, :3]
+    R2 = camera_matrix[1:2, :3]
+    scale = (np.linalg.norm(R1) + np.linalg.norm(R2))/2.0
+    r1 = R1/np.linalg.norm(R1)
+    r2 = R2/np.linalg.norm(R2)
+    r3 = np.cross(r1, r2)
+
+    rotation_matrix = np.concatenate((r1, r2, r3), 0)
+
+    # Get the box that wrap all landmarks.
+    box_left = roi_box[0]
+    box_right = roi_box[2]
+    box_top = roi_box[1]
+    box_bot = roi_box[3]
+
+    # Crop image to get the largest square region that satisfied:
+    # 1. Contains all landmarks
+    # 2. Center of the landmarks box is the center of the region.
+    center = [(box_right+box_left)/2, (box_bot+box_top)/2]
+    
+    # Get the diameter of largest region 
+    # that a landmark can reach when rotating.
+    box_height = box_bot-box_top
+    box_width = box_right-box_left
+    radius = max(box_height, box_width) / 2
+
+    max_length = 2*np.sqrt(2)*radius
+
+    # Crop a bit larger.
+    if expand_ratio is None:
+        expand_ratio = random.uniform(1 / np.sqrt(2), 1.)
+    elif expand_ratio < 1 / np.sqrt(2):
+        '''
+        Expand ratio is a little too big, 
+        crop size will be negative and I don't wanna use more ops.")
+        '''
+        expand_ratio = 0.
+
+    crop_size = int(max_length/2 * expand_ratio)
+
+    img_height, img_width, channel = img.shape
+    canvas = np.zeros((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8)
+    canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
+
+    shift_value = crop_size - radius
+    '''
+    0.125 is purely selected from visualization.
+    '''
+    shift_value_x = int(box_width * 0.125 + shift_value)
+    shift_value_y = int(box_height * 0.125 + shift_value)
+
+    shift_x = np.random.randint(-shift_value_x, shift_value_x)
+    shift_y = np.random.randint(-shift_value_y, shift_value_y)
+
+    # shift_x = shift_value_x
+    # shift_y = shift_value_y
+
+    center_x = int(center[0] + crop_size) + shift_x
+    center_y = int(center[1] + crop_size) + shift_y
+
+    # Top left bottom right.
+    y1 = center_y-crop_size
+    x1 = center_x-crop_size
+    y2 = center_y+crop_size
+    x2 = center_x+crop_size
+
+    cropped_img = canvas[y1:y2, x1:x2]
+
+    flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]], dtype=np.float64)
+    flip_offset = np.array([0, img_height, 0], dtype=np.float64)
+    norm_trans = np.array([img_width/2, img_height/2, 0], dtype=np.float64)
+
+    cropped_trans = (flip_offset + np.array([-x1, -y1, 0])).reshape(3,) @ flip_matrix.T + norm_trans + trans
+
+    resized_scale = scale / (2*crop_size) * target_size
+    resized_trans = cropped_trans / (2*crop_size) * target_size
+
+    re_scaled_rot_matrix = resized_scale * rotation_matrix
+    re_camera_matrix = np.concatenate((re_scaled_rot_matrix, resized_trans.reshape(-1,1)), axis=1)
+    re_params = np.concatenate((re_camera_matrix.reshape(12,1), params[12:].reshape(-1,1)), axis=0)
+
+    return cropped_img, re_params
+
+
+def random_crop(img, roi_box, params, expand_ratio=None, target_size=128):
+    '''
+    Random crop and resize image to target size.
+    '''
+    cropped_img, re_params = random_crop_substep(img, roi_box, params, expand_ratio, target_size)
+    re_img = cv2.resize(cropped_img, (target_size, target_size))
+
+    return re_img, re_params
+
+
+@numba.njit()
+def flip_substep(img, params):
+    img_height, img_width = img.shape[:2]
+
+    camera_matrix = params[:12].reshape(3, -1)
+
+    trans = camera_matrix[:, 3]
+    R1 = camera_matrix[0:1, :3]
+    R2 = camera_matrix[1:2, :3]
+    scale = (np.linalg.norm(R1) + np.linalg.norm(R2))/2.0
+    r1 = R1/np.linalg.norm(R1)
+    r2 = R2/np.linalg.norm(R2)
+    r3 = np.cross(r1, r2)
+
+    rotation_matrix = np.concatenate((r1, r2, r3), 0)
+
+    flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]], dtype=np.float64)
+    flip_offset = np.array([0, img_height, 0], dtype=np.float64)
+
+    norm_trans = np.array([img_width/2, img_height/2, 0], dtype=np.float64)
+
+    flipped_rotation_matrix = flip_matrix @ (scale*rotation_matrix)
+    flipped_trans = (trans + norm_trans) @ flip_matrix.T + flip_offset - norm_trans
+
+    flipped_camera_matrix = np.concatenate((flipped_rotation_matrix, flipped_trans.reshape(-1,1)), axis=1)
+    
+    flipped_params = np.concatenate((flipped_camera_matrix.reshape(12,1), params[12:].reshape(-1,1)), axis=0)
+
+    return flipped_params
+
+def flip(img, params):
+    flipped_params = flip_substep(img, params)
+    flipped_img = cv2.flip(img, 0)
+
+    return flipped_img, flipped_params
