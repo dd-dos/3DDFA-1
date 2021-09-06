@@ -53,9 +53,9 @@ class DDFAv2_Dataset(data.Dataset):
         params = label['params'].reshape(101,1)
         roi_box = label['roi_box'][0]
         
-        img, params = random_crop(img, roi_box, params, target_size=128)
 
         if self.aug:
+            img, params = random_crop(img, roi_box, params, target_size=128)
             img, params = ddfa_augment(
                 img=img, 
                 params=params, 
