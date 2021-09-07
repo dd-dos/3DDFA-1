@@ -2,7 +2,6 @@ import math
 import numpy as np
 
 class RunningStats:
-
     def __init__(self):
         self.n = 0
         self.old_m = 0
@@ -35,18 +34,7 @@ class RunningStats:
     def standard_deviation(self):
         return np.sqrt(self.variance())
 
-# rs = RunningStats()
+rs = RunningStats()
+rs.push(params)
 
-# import tqdm
-# from pathlib import Path
-# import scipy.io as sio
-# file_list = list(Path('data/300VW-3D_cropped_closed_eyes_3ddfa').glob('**/*.mat')) + \
-#             list(Path('data/300WLP_3ddfa').glob('**/*.mat')) + \
-#             list(Path('data/300VW-3D_cropped_opened_eyes_3ddfa').glob('**/*.mat')) + \
-#             list(Path('data/300WLP_3ddfa').glob('**/*.mat'))
-            
-# for file_path in tqdm.tqdm(file_list, total=len(file_list)):
-#     params = sio.loadmat(file_path)['params']
-#     rs.push(params)
-
-# sio.savemat('params_mean_std_12_pose_60_shp_29_exp.mat', {'mean': rs.mean(), 'std': rs.standard_deviation()})
+sio.savemat('params_mean_std_12_pose_60_shp_29_exp.mat', {'mean': rs.mean(), 'std': rs.standard_deviation()})

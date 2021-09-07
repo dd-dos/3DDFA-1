@@ -75,6 +75,9 @@ def test_video(args):
         if not ret:
             break
         
+        frame = cv2.copyMakeBorder(frame, 0, 0, 200, 200, cv2.BORDER_CONSTANT, 0)
+        frame = cv2.resize(frame, (frame_width, frame_height))
+
         # frame = cv2.flip(frame, 0)
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]

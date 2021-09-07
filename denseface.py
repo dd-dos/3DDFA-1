@@ -498,8 +498,8 @@ class FaceAlignment:
             #     'roll': pose[2] / math.pi * 180,
             # })
             angles.append({
-                'yaw': pose[0], 
-                'pitch': pose[1],
+                'yaw': pose[1], 
+                'pitch': pose[0],
                 'roll': pose[2],
             })
 

@@ -6,8 +6,16 @@ mp_face_mesh = mp.solutions.face_mesh
 
 # For webcam input:
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-# cap = cv2.VideoCapture(0)
-cap = cv2.VideoCapture('samples/e7fcc117-8877-4902-815c-cb079cd62b88__MmoYJ.mov')
+cap = cv2.VideoCapture(0)
+# cap = cv2.VideoCapture('samples/e7fcc117-8877-4902-815c-cb079cd62b88__MmoYJ.mov')
+
+frame_width = int(cap.get(3))
+frame_height = int(cap.get(4))
+size = (frame_width, frame_height)
+result = cv2.VideoWriter('mediapipe.mp4', 
+                        cv2.VideoWriter_fourcc(*'MJPG'),
+                        10, size)
+
 with mp_face_mesh.FaceMesh(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as face_mesh:
@@ -46,6 +54,10 @@ with mp_face_mesh.FaceMesh(
             connection_drawing_spec=mp_drawing_styles
             .get_default_face_mesh_contours_style())
     cv2.imshow('MediaPipe FaceMesh', image)
-    if cv2.waitKey(5) & 0xFF == 27:
+    result.write(image)
+
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
       break
 cap.release()
+result.release()

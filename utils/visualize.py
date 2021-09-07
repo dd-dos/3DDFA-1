@@ -6,7 +6,6 @@ import torch
 import torchmetrics
 import torchvision.transforms as T
 from .face3d import face3d
-from .ddfa import AverageMeter
 
 fm = face3d.face_model.FaceModel()
 
@@ -51,6 +50,25 @@ def de_normalize(tensor_img: torch.Tensor, mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5]
     _img = de_normalizer(tensor_img)
 
     return _img
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
 
 class RandomBullShit:
     def __init__(self):

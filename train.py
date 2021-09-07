@@ -17,8 +17,9 @@ from torch.utils.data import DataLoader
 import mobilenet_v1
 import torch.backends.cudnn as cudnn
 
-from utils.ddfa import ToTensorGjz, NormalizeGjz
-from utils.ddfa import str2bool, AverageMeter
+from utils.compute import RunningStats
+from utils.imutils import ToTensorGjz, NormalizeGjz
+from utils.visualize import AverageMeter
 from utils.ddfa_v2 import DDFAv2_Dataset
 from utils.io import mkdir
 from utils.scheduler import CyclicCosineDecayLR
@@ -58,11 +59,9 @@ def parse_args():
     parser.add_argument('--snapshot', default='', type=str)
     parser.add_argument('--log-file', default='output.log', type=str)
     parser.add_argument('--log-mode', default='w', type=str)
-    parser.add_argument('--size-average', default='true', type=str2bool)
     parser.add_argument('--num-classes', default=101, type=int, help = '12 pose + 60 shape + 29 expression')
     parser.add_argument('--arch', default='mobilenet_1', type=str,
                         choices=arch_choices)
-    parser.add_argument('--frozen', default='false', type=str2bool)
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
     parser.add_argument('--resample-num', default=0, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
@@ -74,7 +73,12 @@ def parse_args():
     parser.add_argument('--scheduler-restart-interval', default=5, type=float)
     parser.add_argument('--scheduler-restart-lr', default=1e-4, type=float)
     parser.add_argument('--optimizer', default='adam', type=str)
-    parser.add_argument('--num-log-samples', default=32, type=int, help='number of samples for logging')
+    parser.add_argument('--num-log-samples', default=32, type=int, 
+                        help='number of samples for logging')
+    parser.add_argument('--compute-mean-std', action='store_true', 
+                        help='compute mean and std of 101 params')
+    parser.add_argument('--compute-mean-std-iteration', default=3, type=int, 
+                        help='number of iteration to compute mean and std of 101 params')
 
     global args
     args = parser.parse_args()
@@ -434,6 +438,14 @@ def main():
     
     logging.info('=> Init loss.')
     validate(val_loader, model, 0, optimizer)
+
+    if args.compute_mean_std:
+        logging.info('=> Compute mean and std of params.')
+        for _ in range(args.compute_mean_std_iteration):
+            for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
+                mean = target.mean(axis=0).item()
+                std = target.std(axis=0).item()
+                import ipdb; ipdb.set_trace(context=10)
     
     for epoch in range(1, args.epochs):
         train(train_loader, model, optimizer, epoch, scaler)
