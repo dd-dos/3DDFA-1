@@ -44,10 +44,10 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
 
 def hide_face(img, roi_box):
     rate = np.random.rand()
-    if rate < 0.4:
+    if rate < 0.45:
         img = hand_face(img, roi_box)
-    elif 0.4 <= rate < 0.8:
-        img = crop_range(img, ratio=1/3)
+    elif 0.45 <= rate < 0.9:
+        img = crop_range(img, ratio=1/4)
 
     return img
 
@@ -382,6 +382,12 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     y2 = center_y+crop_size
     x2 = center_x+crop_size
 
+    n_box_left = box_left + crop_size - x1
+    n_box_right = box_right + crop_size - x1
+    n_box_top = box_top + crop_size - y1
+    n_box_bot = box_bot + crop_size - y1
+    n_roi_box = [n_box_left, n_box_top, n_box_right, n_box_bot]
+
     cropped_img = canvas[y1:y2, x1:x2]
 
     flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]], dtype=np.float64)
@@ -397,20 +403,21 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     re_camera_matrix = np.concatenate((re_scaled_rot_matrix, resized_trans.reshape(-1,1)), axis=1)
     re_params = np.concatenate((re_camera_matrix.reshape(12,1), params[12:].reshape(-1,1)), axis=0)
 
-    return cropped_img, re_params
+    return cropped_img, re_params, n_roi_box
 
 
 def random_crop(img, roi_box, params, expand_ratio=None, target_size=128):
     '''
     Random crop and resize image to target size.
     '''
-    cropped_img, re_params = random_crop_substep(img, roi_box, params, expand_ratio, target_size)
+    cropped_img, re_params, n_roi_box = random_crop_substep(img, roi_box, params, expand_ratio, target_size)
     re_img = cv2.resize(cropped_img, (target_size, target_size))
+    re_roi_box = np.array(n_roi_box) / cropped_img.shape[0] * target_size
     # re_pts = fm.reconstruct_vertex(re_img, re_params)[fm.bfm.kpt_ind][:,:2]
     # draw_pts(re_img, re_pts)
     # import ipdb; ipdb.set_trace(context=10)
 
-    return re_img, re_params
+    return re_img, re_params, re_roi_box
 
 
 @numba.njit()

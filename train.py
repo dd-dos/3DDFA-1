@@ -16,6 +16,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import mobilenet_v1
+import mobilenet_v2
 import torch.backends.cudnn as cudnn
 
 from utils.compute import RunningStats
@@ -42,6 +43,7 @@ os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='3DMM Fitting')
+    parser.add_argument('--backbone', default='mobilenet_v1', type=str, help='backbone')
     parser.add_argument('--workers', default=6, type=int)
     parser.add_argument('--epochs', default=40, type=int)
     parser.add_argument('--train-batch-size', default=128, type=int)
@@ -128,7 +130,7 @@ def train(train_loader, model, optimizer, epoch, scaler):
             else:
                 wpdc_loss = wpdc_criterion(output, target)
                 vdc_loss = vdc_criterion(output, target)
-                total_loss = args.beta*wpdc_loss + (1-args.beta)*vdc_loss*(7e-2)
+                total_loss = args.beta*wpdc_loss + (1-args.beta)*vdc_loss*(1e-3)
 
             losses.update(total_loss)
 
@@ -325,7 +327,11 @@ def main():
     )
 
     if args.resume:
-        model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+        if args.backbone == 'mobilenet_v1':
+            model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+        elif args.backbone == 'mobilenet_v2':
+            model = getattr(mobilenet_v2, args.arch)(num_classes=args.num_classes)
+
         if Path(args.resume).is_file():
             logging.info(f'Loading checkpoint {args.resume}')
             checkpoint = torch.load(args.resume, map_location=lambda storage, loc: storage)['state_dict']
@@ -340,7 +346,10 @@ def main():
         else:
             logging.info(f'=> No checkpoint found at {args.resume}')
     else:
-        model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+        if args.backbone == 'mobilenet_v1':
+            model = getattr(mobilenet_v1, args.arch)(num_classes=args.num_classes)
+        elif args.backbone == 'mobilenet_v2':
+            model = getattr(mobilenet_v2, args.arch)(num_classes=args.num_classes)
 
     torch.cuda.set_device(args.devices_id[0])  # fix bug for `ERROR: all tensors must be on devices[0]`
     model = nn.DataParallel(model, device_ids=args.devices_id).cuda()  # -> GPU
