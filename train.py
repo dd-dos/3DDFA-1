@@ -9,6 +9,7 @@ import numpy as np
 import argparse
 import time
 import logging
+import scipy.io as sio
 
 import torch
 import torch.nn as nn
@@ -36,7 +37,6 @@ VDC_LOSS = 0.
 arch_choices = ['mobilenet_2', 'mobilenet_1', 'mobilenet_075', 'mobilenet_05', 'mobilenet_025']
 
 from clearml import Task
-task = Task.init(project_name="Facial-landmark", task_name="3DDFA-Close-eyes-Face-up-Adam")
 TODAY = datetime.today().strftime('%Y-%m-%d')
 os.makedirs(f'snapshot/{TODAY}', exist_ok=True)
 
@@ -75,10 +75,7 @@ def parse_args():
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--num-log-samples', default=32, type=int, 
                         help='number of samples for logging')
-    parser.add_argument('--compute-mean-std', action='store_true', 
-                        help='compute mean and std of 101 params')
-    parser.add_argument('--compute-mean-std-iteration', default=3, type=int, 
-                        help='number of iteration to compute mean and std of 101 params')
+    parser.add_argument('--clearml', action='store_true')
 
     global args
     args = parser.parse_args()
@@ -314,6 +311,10 @@ def validate(val_loader, model, epoch, optimizer):
 def main():
     parse_args()  
 
+    if args.clearml:
+        task = Task.init(project_name="Facial-landmark", 
+                        task_name="3DDFA-Close-eyes-Face-up-Adam")
+
     logging.basicConfig(
         format='[%(asctime)s] [p%(process)s] [%(pathname)s:%(lineno)d] [%(levelname)s] %(message)s',
         level=logging.INFO,
@@ -374,7 +375,6 @@ def main():
                         root=file_list_1,
                         transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
                         aug=True,
-                        rotate_rate=0
                     )
                 )
                 logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
@@ -385,7 +385,6 @@ def main():
                         root=file_list_1,
                         transform=transforms.Compose([ToTensorGjz(), NormalizeGjz(mean=127.5, std=128)]),
                         aug=True,
-                        rotate_rate=0
                     )
                 )
                 logging.info(f'==> {args.train_path[idx]} - generated: {len(train_dataset[-1])}')
@@ -435,18 +434,10 @@ def main():
     lr = args.base_lr
 
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
-    
+
     logging.info('=> Init loss.')
     validate(val_loader, model, 0, optimizer)
 
-    if args.compute_mean_std:
-        logging.info('=> Compute mean and std of params.')
-        for _ in range(args.compute_mean_std_iteration):
-            for i, (input, target) in enumerate(tqdm.tqdm(train_loader, total=len(train_loader))):
-                mean = target.mean(axis=0).item()
-                std = target.std(axis=0).item()
-                import ipdb; ipdb.set_trace(context=10)
-    
     for epoch in range(1, args.epochs):
         train(train_loader, model, optimizer, epoch, scaler)
         validate(val_loader, model, epoch, optimizer)

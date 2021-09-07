@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from math import sqrt
 from utils.io import _numpy_to_cuda
-from utils.params import keypoints
 from utils.face3d.face3d.face_model import FaceModel
 fm = FaceModel()
 
@@ -42,7 +41,7 @@ class WPDCLoss(nn.Module):
         self.w_exp = _to_tensor(fm.bfm.model['expPC'][:,:29])
 
         self.w_shp_length = self.w_shp.shape[0] // 3
-        self.keypoints = _to_tensor(keypoints)
+        self.keypoints = _to_tensor(fm.bfm.keypoints)
         self.resample_num = resample_num
         self.magic_number = fm.scale_mean
 

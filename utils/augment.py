@@ -1,3 +1,4 @@
+from numba.core.types.misc import ExceptionClass
 from utils.face3d.face3d.utils import show_vertices
 import imgaug.augmenters as iaa
 import numpy as np
@@ -9,8 +10,9 @@ import random
 import numba
 import pathlib
 import os
-# from .face3d import face3d
-# fm = face3d.face_model.FaceModel()
+from .face3d import face3d
+from .face3d.utils import draw_pts
+fm = face3d.face_model.FaceModel()
 
 cwd = pathlib.Path(__file__).parent.resolve()
 hand_folder = os.path.join(cwd, 'hand')
@@ -25,7 +27,7 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
         img = vanilla_aug(image=img)
     else:
         if np.random.rand() < hide_face_rate:
-            img = hide_face(img, params, roi_box)
+            img = hide_face(img, roi_box)
 
         if np.random.rand() < rotate_rate:
             angles = np.linspace(0, 360, num=13)
@@ -342,11 +344,11 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
 
     # Crop a bit larger.
     if expand_ratio is None:
-        expand_ratio = random.uniform(1 / np.sqrt(2), 1.)
-    elif expand_ratio < 1 / np.sqrt(2):
+        expand_ratio = random.uniform(0.8, 1.)
+    else:
         '''
         Expand ratio is a little too big, 
-        crop size will be negative and I don't wanna use more ops.")
+        shift value will be negative and I don't wanna use more ops.")
         '''
         expand_ratio = 0.
 
@@ -356,15 +358,17 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     canvas = np.zeros((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8)
     canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
 
-    shift_value = crop_size - radius
+    shift_value = int(max_length/2 * expand_ratio - radius)
     '''
     0.125 is purely selected from visualization.
     '''
-    shift_value_x = int(box_width * 0.125 + shift_value)
-    shift_value_y = int(box_height * 0.125 + shift_value)
+    # shift_value_x = int(box_width * 0.125 + shift_value)
+    # shift_value_y = int(box_height * 0.125 + shift_value)
+    shift_value_x = shift_value
+    shift_value_y = shift_value
 
-    shift_x = np.random.randint(-shift_value_x, shift_value_x)
-    shift_y = np.random.randint(-shift_value_y, shift_value_y)
+    shift_x = random.randrange(-shift_value_x, shift_value_x)
+    shift_y = random.randrange(-shift_value_y, shift_value_y)
 
     # shift_x = shift_value_x
     # shift_y = shift_value_y
@@ -402,6 +406,9 @@ def random_crop(img, roi_box, params, expand_ratio=None, target_size=128):
     '''
     cropped_img, re_params = random_crop_substep(img, roi_box, params, expand_ratio, target_size)
     re_img = cv2.resize(cropped_img, (target_size, target_size))
+    # re_pts = fm.reconstruct_vertex(re_img, re_params)[fm.bfm.kpt_ind][:,:2]
+    # draw_pts(re_img, re_pts)
+    # import ipdb; ipdb.set_trace(context=10)
 
     return re_img, re_params
 

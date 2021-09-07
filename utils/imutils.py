@@ -56,6 +56,7 @@ def cropped_to_orginal(pts, length, center, resize):
 
     return coord_original_cropped_pts
 
+
 class ToTensorGjz(object):
     def __call__(self, pic):
         if isinstance(pic, np.ndarray):

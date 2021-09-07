@@ -8,8 +8,8 @@ from utils.face3d.face3d.face_model import FaceModel
 from utils.face3d.utils import show_vertices
 fm = FaceModel()
 
-# _to_tensor = _numpy_to_cuda  # gpu
-_to_tensor = _numpy_to_tensor
+_to_tensor = _numpy_to_cuda  # gpu
+# _to_tensor = _numpy_to_tensor
 
 def parse_param_batch(param):
     """Work for both numpy and tensor"""
@@ -87,15 +87,12 @@ class VDCLoss(nn.Module):
         offset[:, -1] = offsetg[:, -1]
 
         N = input.shape[0]
-        # import ipdb; ipdb.set_trace(context=10)
-        # with torch.cuda.amp.autocast(enabled=False):
-        gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
-            .view(N, -1, 3).permute(0, 2, 1) + offsetg
-        vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
-            .view(N, -1, 3).permute(0, 2, 1) + offset
+        with torch.cuda.amp.autocast(enabled=False):
+            gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
+                .view(N, -1, 3).permute(0, 2, 1) + offsetg
+            vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
+                .view(N, -1, 3).permute(0, 2, 1) + offset
 
-        show_vertices(gt_vertex, '3D')
-        import ipdb; ipdb.set_trace(context=10)
         diff = (gt_vertex - vertex) ** 2
         loss = torch.mean(diff)
         return loss

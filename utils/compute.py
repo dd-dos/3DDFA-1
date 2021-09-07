@@ -1,4 +1,3 @@
-import math
 import numpy as np
 
 class RunningStats:
@@ -33,8 +32,3 @@ class RunningStats:
     
     def standard_deviation(self):
         return np.sqrt(self.variance())
-
-rs = RunningStats()
-rs.push(params)
-
-sio.savemat('params_mean_std_12_pose_60_shp_29_exp.mat', {'mean': rs.mean(), 'std': rs.standard_deviation()})

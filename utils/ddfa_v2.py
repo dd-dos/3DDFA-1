@@ -21,7 +21,7 @@ class DDFAv2_Dataset(data.Dataset):
                 hide_face_rate=0.5, 
                 rotate_rate=0.5, 
                 vanilla_aug_rate=0.6,
-                compute_params_mean_std=False):
+                ):
         if isinstance(root, list):
             self.file_list = root
         else:
@@ -32,7 +32,6 @@ class DDFAv2_Dataset(data.Dataset):
         self.hide_face_rate = hide_face_rate
         self.rotate_rate = rotate_rate
         self.vanilla_aug_rate = vanilla_aug_rate
-        self.compute_params_mean_std = compute_params_mean_std
 
     def __len__(self):
         return len(self.file_list)
@@ -44,7 +43,9 @@ class DDFAv2_Dataset(data.Dataset):
         This part is for showing samples before feeding the model.
         '''
         # pts = fm.reconstruct_vertex(img, params)[fm.bfm.kpt_ind][:,:2]
-        # face3d.utils.show_pts(img, pts)
+        # # face3d.utils.show_pts(img, pts)
+        # face3d.utils.draw_pts(img, pts)
+        # import ipdb; ipdb.set_trace(context=10)
 
         img = self.transform(img)
         params = self._transform_params(params)
@@ -76,9 +77,6 @@ class DDFAv2_Dataset(data.Dataset):
         return img, params
 
     def _transform_params(self, params):
-        if self.compute_params_mean_std:
-            return params
-
         t_params = params.reshape(-1,).astype(np.float32)
         t_params = (t_params - fm.bfm.params_mean_101) / fm.bfm.params_std_101
 
