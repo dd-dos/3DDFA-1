@@ -8,8 +8,10 @@ from utils.face3d.face3d.face_model import FaceModel
 from utils.face3d.utils import show_vertices
 fm = FaceModel()
 
-_to_tensor = _numpy_to_cuda  # gpu
-# _to_tensor = _numpy_to_tensor
+if torch.cuda.is_available():
+    _to_tensor = _numpy_to_cuda  # gpu
+else:
+    _to_tensor = _numpy_to_tensor
 
 def parse_param_batch(param):
     """Work for both numpy and tensor"""
@@ -78,7 +80,11 @@ class VDCLoss(nn.Module):
 
         # resample index
         index = torch.randperm(self.w_shp_length)[:self.resample_num].reshape(-1, 1)
-        keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
+        if torch.cuda.is_available():
+            keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1).cuda()
+        else:
+            keypoints_resample = torch.cat((3 * index, 3 * index + 1, 3 * index + 2), dim=1).view(-1)
+
         keypoints_mix = torch.cat((self.keypoints, keypoints_resample))
         w_shp_base = self.w_shp[keypoints_mix]
         u_base = self.u[keypoints_mix]
@@ -87,11 +93,24 @@ class VDCLoss(nn.Module):
         offset[:, -1] = offsetg[:, -1]
 
         N = input.shape[0]
-        with torch.cuda.amp.autocast(enabled=False):
+        if torch.cuda.is_available():
+            with torch.cuda.amp.autocast(enabled=False):
+                gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
+                    .view(N, -1, 3).permute(0, 2, 1) + offsetg
+                vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
+                    .view(N, -1, 3).permute(0, 2, 1) + offset
+        else:
             gt_vertex = pg @ (u_base + w_shp_base @ alpha_shpg + w_exp_base @ alpha_expg) \
                 .view(N, -1, 3).permute(0, 2, 1) + offsetg
             vertex = p @ (u_base + w_shp_base @ alpha_shp + w_exp_base @ alpha_exp) \
                 .view(N, -1, 3).permute(0, 2, 1) + offset
+
+        # re_pts = pg @ (self.u + self.w_shp @ alpha_shpg + self.w_exp @ alpha_expg) \
+        #             .view(N, -1, 3).permute(0, 2, 1) + offsetg
+        # from utils.face3d.face3d.utils import show_vertices
+        # re_pts_68 = re_pts[0].T[fm.bfm.kpt_ind]
+        # show_vertices(re_pts_68)
+        # import ipdb; ipdb.set_trace(context=10)
 
         diff = (gt_vertex - vertex) ** 2
         loss = torch.mean(diff)

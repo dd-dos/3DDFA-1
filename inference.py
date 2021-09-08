@@ -27,8 +27,8 @@ def argparser():
     P.add_argument('--flip', action='store_true')
     P.add_argument('--squeeze', type=int, default=0)
     P.add_argument('--expand-ratio', type=float, default=1.1)
-    P.add_argument('--backbone', type=str)
-    P.add_argument('--arch', type=str)
+    P.add_argument('--backbone', type=str, default='mobilenet_v2')
+    P.add_argument('--arch', type=str, default='mobilenet_2')
 
     args = P.parse_args()
 
