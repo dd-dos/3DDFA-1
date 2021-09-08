@@ -24,7 +24,9 @@ class FaceAlignment:
                  max_batch_size=8,
                  expand_ratio=1.2,
                  input_size=120,
-                 num_classes=62):
+                 num_classes=62,
+                 backbone='mobilenet_v2',
+                 arch='mobilenet_1'):
         """
         Main class for processing dense face.
 
@@ -39,8 +41,10 @@ class FaceAlignment:
         :expand_ratio: ratio to expand image.
         :input_size: input image size.
         """
-        # self.dense_face_model = mobilenet_v1.mobilenet_1(num_classes=num_classes)
-        self.dense_face_model = mobilenet_v2.mobilenet_2(num_classes=num_classes)
+        if backbone == 'mobilenet_v1':
+            self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
+        elif backbone == 'mobilenet_v2':
+            self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
 
         checkpoint = torch.load(model_path, map_location=device)['state_dict']
         model_dict = self.dense_face_model.state_dict()
@@ -97,19 +101,19 @@ class FaceAlignment:
         for idx, det in enumerate(detected_faces):
             cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=self.expand_ratio)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
-            # show_ndarray_img(inp)
-            # import ipdb; ipdb.set_trace(context=10)
-            # ori_inp = inp.copy()
+            ori_inp = inp.copy()
             cv2.imwrite('inp.jpg', inp)
             inp = self.transformer(inp)
             inp = inp.to(self.device)
             inp.unsqueeze_(0)
 
             out = self.dense_face_model(inp).squeeze(0)
-            # import ipdb; ipdb.set_trace(context=10)
-            # vertex = fm.reconstruct_vertex(ori_inp, out.numpy())[fm.bfm.kpt_ind]
+            vertex = fm.reconstruct_vertex(ori_inp, out.numpy())[fm.bfm.kpt_ind]
             # show_pts(ori_inp, vertex[:,:2])
-            # import ipdb; ipdb.set_trace(context=10)
+            for i in range(vertex[:,:2].shape[0]):
+                _pts = vertex[:,:2][i].astype(int)
+                _img = cv2.circle(ori_inp, (_pts[0], _pts[1]),1,(0,255,0), -1, 8)
+            cv2.imwrite('out.jpg', _img)
 
             params_list.append(out.numpy().reshape(-1,))
             extra_list.append(

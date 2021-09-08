@@ -24,7 +24,12 @@ def argparser():
     P.add_argument('--bfm-fp', type=str, default='configs/bfm_noneck_v3.pkl')
     P.add_argument('--input-size', type=int, default='120')
     P.add_argument('--num-classes', type=int, default='62')
-    
+    P.add_argument('--flip', action='store_true')
+    P.add_argument('--squeeze', type=int, default=0)
+    P.add_argument('--expand-ratio', type=float, default=1.1)
+    P.add_argument('--backbone', type=str)
+    P.add_argument('--arch', type=str)
+
     args = P.parse_args()
 
     return args
@@ -66,41 +71,36 @@ def test_video(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.1)
+        expand_ratio=args.expand_ratio,
+        backbone=args.backbone,
+        arch=args.arch)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
         ret, frame = cap.read()
-        # frame = cv2.resize(frame, (max(frame_width, frame_height), max(frame_width, frame_height)))
         if not ret:
             break
         
-        # frame = cv2.copyMakeBorder(frame, 0, 0, 200, 200, cv2.BORDER_CONSTANT, 0)
-        # frame = cv2.resize(frame, (frame_width, frame_height))
+        if args.squeeze != 0:
+            frame = cv2.copyMakeBorder(frame, 0, 0, args.squeeze, args.squeeze, cv2.BORDER_CONSTANT, 0)
+            frame = cv2.resize(frame, (frame_width, frame_height))
 
-        # frame = cv2.flip(frame, 0)
+        if args.flip:
+            frame = cv2.flip(frame, 0)
+
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]
-        foo_lms = detector_info[1]
         detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
-
-        # for landmarks in foo_lms:
-        #     # points = landmarks.reshape((2,5)).T
-        #     for idx in range(5):
-        #         pts = (int(landmarks[idx].item()), int(landmarks[5+idx].item()))
-        #         cv2.circle(frame, pts, 2, (0,255,0), -1, 2)
+        if len(detected_faces) == 0:
+            print("No face detected!")
+            cv2.imshow('', frame)
+            cv2.waitKey(1)
+            continue
 
         import time
         key = cv2.waitKey(1) & 0xFF
 
         t0 = time.time()
-        # frame = \
-        #     dense_model.draw_landmarks(
-        #         frame, 
-        #         detected_faces,
-        #         draw_eyes=False,
-        #         no_background=False,
-        #         draw_angles=True)
         try:
             frame = \
                 dense_model.draw_landmarks(
@@ -110,6 +110,8 @@ def test_video(args):
                     no_background=False,
                     draw_angles=True)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(e)
         print(time.time()-t0)
         # processed_frame = dense_model.draw_mesh(frame)
@@ -118,7 +120,6 @@ def test_video(args):
      
         if save_video:
             result.write(frame)
-        # frame = model.get_head_pose(frame)
 
         cv2.imshow('', frame)
         # cv2.waitKey(0)
@@ -149,7 +150,7 @@ def test_image(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.5)
+        expand_ratio=1.1)
 
     # processed_frame = dense_model.draw_landmarks(
     #     args.img_path, 
