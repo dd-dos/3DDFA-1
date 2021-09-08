@@ -66,7 +66,7 @@ def test_video(args):
         input_size=args.input_size, 
         device='cpu', 
         num_classes=args.num_classes,
-        expand_ratio=1.3)
+        expand_ratio=1.1)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -75,16 +75,14 @@ def test_video(args):
         if not ret:
             break
         
-        frame = cv2.copyMakeBorder(frame, 0, 0, 200, 200, cv2.BORDER_CONSTANT, 0)
-        frame = cv2.resize(frame, (frame_width, frame_height))
+        # frame = cv2.copyMakeBorder(frame, 0, 0, 200, 200, cv2.BORDER_CONSTANT, 0)
+        # frame = cv2.resize(frame, (frame_width, frame_height))
 
         # frame = cv2.flip(frame, 0)
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]
         foo_lms = detector_info[1]
         detected_faces = [det for det in detected_faces if det[-1] >= 0.9]
-        print(f'frame shape: {frame.shape}')
-        print(f'detected faces: {detected_faces}')
 
         # for landmarks in foo_lms:
         #     # points = landmarks.reshape((2,5)).T

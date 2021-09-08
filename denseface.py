@@ -11,6 +11,7 @@ fm = face3d.face_model.FaceModel()
 from utils.face3d.face3d.utils import *
 
 import mobilenet_v1
+import mobilenet_v2
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -38,7 +39,9 @@ class FaceAlignment:
         :expand_ratio: ratio to expand image.
         :input_size: input image size.
         """
-        self.dense_face_model = mobilenet_v1.mobilenet_1(num_classes=num_classes)
+        # self.dense_face_model = mobilenet_v1.mobilenet_1(num_classes=num_classes)
+        self.dense_face_model = mobilenet_v2.mobilenet_2(num_classes=num_classes)
+
         checkpoint = torch.load(model_path, map_location=device)['state_dict']
         model_dict = self.dense_face_model.state_dict()
         for k in checkpoint.keys():
