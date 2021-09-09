@@ -358,23 +358,23 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     canvas = np.zeros((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8)
     canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
 
-    shift_value = int(max_length/2 * expand_ratio - radius)
+    # shift_value = int(max_length/2 * expand_ratio - radius)
     '''
     0.125 is purely selected from visualization.
     '''
     # shift_value_x = int(box_width * 0.125 + shift_value)
     # shift_value_y = int(box_height * 0.125 + shift_value)
-    shift_value_x = shift_value
-    shift_value_y = shift_value
+    # shift_value_x = shift_value
+    # shift_value_y = shift_value
 
-    shift_x = random.randrange(-shift_value_x, shift_value_x)
-    shift_y = random.randrange(-shift_value_y, shift_value_y)
+    # shift_x = random.randrange(-shift_value_x, shift_value_x)
+    # shift_y = random.randrange(-shift_value_y, shift_value_y)
 
     # shift_x = shift_value_x
     # shift_y = shift_value_y
 
-    center_x = int(center[0] + crop_size) + shift_x
-    center_y = int(center[1] + crop_size) + shift_y
+    center_x = int(center[0] + crop_size)
+    center_y = int(center[1] + crop_size)
 
     # Top left bottom right.
     y1 = center_y-crop_size
