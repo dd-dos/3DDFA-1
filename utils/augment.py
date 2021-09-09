@@ -19,7 +19,7 @@ hand_folder = os.path.join(cwd, 'hand')
 hand_path_list = list(map(str, pathlib.Path(hand_folder).glob('*.png')))
 hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
-def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_rate=0.5, vanilla_aug_rate=0.6):
+def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_rate=0.5, vanilla_aug_rate=0.6, flip_rate=0.5):
     if full:
         img = hide_face(img, params, roi_box)
         angles = np.linspace(0, 360, num=13)
@@ -36,24 +36,22 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
         if np.random.rand() < vanilla_aug_rate:
             img = vanilla_aug(image=img)
 
-        if np.random.rand() < 0.5:
+        if np.random.rand() < flip_rate:
             img, params = flip(img, params)
 
     return np.ascontiguousarray(img), params
 
 
 def hide_face(img, roi_box):
-    rate = np.random.rand()
-    if rate < 0.45:
+    if np.random.rand() < 0.5:
         img = hand_face(img, roi_box)
-    elif 0.45 <= rate < 0.9:
+    else:
         img = crop_range(img, ratio=1/4)
 
     return img
 
 # Use case: increase generalization; input image is not too bad.
 vanilla_aug = iaa.OneOf([
-    iaa.Sometimes(0, iaa.Grayscale()),
     iaa.Grayscale(),
     iaa.imgcorruptlike.Pixelate(severity=(1, 2)),	
     iaa.imgcorruptlike.JpegCompression(severity=(1, 2)),	
@@ -66,8 +64,23 @@ vanilla_aug = iaa.OneOf([
     iaa.AdditivePoissonNoise((10, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15)),
     iaa.AdditiveLaplaceNoise(scale=(5, 15), per_channel=True),
+    iaa.AdditiveGaussianNoise(scale=(20,45)),
+    iaa.AdditiveGaussianNoise(scale=(20,45), per_channel=True),
     iaa.ChannelShuffle(p=1),
-    iaa.imgcorruptlike.SpeckleNoise(severity=(1,2))
+    iaa.imgcorruptlike.SpeckleNoise(severity=(1,2)),
+    iaa.imgcorruptlike.DefocusBlur(severity=(1,2)),
+    iaa.MotionBlur(k=(7, 10), angle=(-45, 45)),
+    iaa.GaussianBlur((1.0, 3.0)),
+    iaa.AverageBlur(k=(6, 8)),
+    iaa.MedianBlur(k=(5, 7)),
+    iaa.CoarseDropout((0.02,0.05), size_percent=(0.15,0.5)),
+    iaa.CoarseDropout((0.02,0.05), size_percent=(0.15,0.5), per_channel=0.5),
+    iaa.Multiply((0.5, 1.5)),
+    iaa.Multiply((0.5, 1.5), per_channel=0.5),
+    iaa.Cutout(nb_iterations=(1, 2), size=0.15, squared=False, fill_mode=("constant", "gaussian"), 
+                cval=(0, 255), fill_per_channel=0.5),
+    iaa.Add((-40, 40)),
+    iaa.Add((-40, 40), per_channel=0.5)
 ])
 
 
@@ -108,8 +121,8 @@ def n_rotate_vertex(img, params, angle):
     flip_offset = np.array([0, img_height, 0], dtype=np.float64)
     norm_trans = np.array([img_width/2, img_height/2, 0], dtype=np.float64)
 
-    # shp = params[12:72].reshape(-1, 1)
-    # exp = params[72:].reshape(-1, 1)
+    # shp = params[12:52].reshape(-1, 1)
+    # exp = params[52:].reshape(-1, 1)
     # vertex = fm.bfm.reduced_generated_vertices(shp, exp)[fm.bfm.kpt_ind]
 
     # trans_v = vertex @ p.T + offset.reshape(3,) + norm_trans
@@ -344,7 +357,7 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
 
     # Crop a bit larger.
     if expand_ratio is None:
-        expand_ratio = random.uniform(0.8, 1.)
+        expand_ratio = random.uniform(0.8, 1.2)
     else:
         '''
         Expand ratio is a little too big, 
