@@ -7,7 +7,6 @@ import torch
 import torchvision
 from utils import estimate_pose, imutils
 from utils.face3d import face3d
-fm = face3d.face_model.FaceModel()
 from utils.face3d.face3d.utils import *
 
 import mobilenet_v1
@@ -26,7 +25,8 @@ class FaceAlignment:
                  input_size=120,
                  num_classes=62,
                  backbone='mobilenet_v2',
-                 arch='mobilenet_1'):
+                 arch='mobilenet_1',
+                 params_mean_std=''):
         """
         Main class for processing dense face.
 
@@ -41,16 +41,19 @@ class FaceAlignment:
         :expand_ratio: ratio to expand image.
         :input_size: input image size.
         """
-        if backbone == 'mobilenet_v1':
-            self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
-        elif backbone == 'mobilenet_v2':
-            self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
+        self.fm = face3d.face_model.FaceModel(params_mean_std)
 
-        checkpoint = torch.load(model_path, map_location=device)['state_dict']
-        model_dict = self.dense_face_model.state_dict()
-        for k in checkpoint.keys():
-            model_dict[k.replace('module.', '')] = checkpoint[k]
-        self.dense_face_model.load_state_dict(model_dict)
+        # if backbone == 'mobilenet_v1':
+        #     self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
+        # elif backbone == 'mobilenet_v2':
+        #     self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
+
+        # checkpoint = torch.load(model_path, map_location=device)['state_dict']
+        # model_dict = self.dense_face_model.state_dict()
+        # for k in checkpoint.keys():
+        #     model_dict[k.replace('module.', '')] = checkpoint[k]
+        # self.dense_face_model.load_state_dict(model_dict)
+        self.dense_face_model = torch.jit.load('model.pt')
         self.dense_face_model.eval()
 
         # for param in self.dense_face_model.parameters():
@@ -108,7 +111,7 @@ class FaceAlignment:
             inp.unsqueeze_(0)
 
             out = self.dense_face_model(inp).squeeze(0)
-            vertex = fm.reconstruct_vertex(ori_inp, out.numpy())[fm.bfm.kpt_ind]
+            vertex = self.fm.reconstruct_vertex(ori_inp, out.numpy())[self.fm.bfm.kpt_ind]
             # show_pts(ori_inp, vertex[:,:2])
             for i in range(vertex[:,:2].shape[0]):
                 _pts = vertex[:,:2][i].astype(int)
@@ -398,10 +401,10 @@ class FaceAlignment:
             pad = extra_list[idx]['pad']
 
             # vertex = ddfa.reconstruct_vertex(params)
-            vertex = fm.reconstruct_vertex(
+            vertex = self.fm.reconstruct_vertex(
                 np.zeros((self.input_size,self.input_size,3)), 
                 params
-            )[fm.bfm.kpt_ind].T
+            )[self.fm.bfm.kpt_ind].T
 
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
@@ -444,7 +447,7 @@ class FaceAlignment:
             length = extra[idx]['length']
             pad = extra[idx]['pad']
 
-            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind]
+            vertex = self.fm.reconstruct_vertex(np.zeros((256,256,3)), params)[self.fm.bfm.kpt_ind]
 
             pts_img = imutils.cropped_to_orginal(
                 vertex, length, center, self.input_size
@@ -486,7 +489,7 @@ class FaceAlignment:
             length = extra_list[idx]['length']
             pad = extra_list[idx]['pad']
 
-            vertex = fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[fm.bfm.kpt_ind][:,:2].T
+            vertex = self.fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[self.fm.bfm.kpt_ind][:,:2].T
 
             pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
 
@@ -497,7 +500,7 @@ class FaceAlignment:
             landmarks.append(pts_img.T)
 
             # _, pose = estimate_pose.parse_pose(params)
-            _,_,_,pose,_= fm._parse_params(params)
+            _,_,_,pose,_= self.fm._parse_params(params)
             # pose = (0,0,0)
             # angles.append({
             #     'yaw': pose[0] / math.pi * 180, 
@@ -546,7 +549,7 @@ class FaceAlignment:
             pad = extra['pad']
 
             # vertex = ddfa.reconstruct_vertex(params)
-            vertex = fm.reconstruct_vertex(np.zeros((256,256,3)), params)[fm.bfm.kpt_ind]
+            vertex = self.fm.reconstruct_vertex(np.zeros((256,256,3)), params)[self.fm.bfm.kpt_ind]
 
             pts_img = imutils.cropped_to_orginal(
                 vertex, length, center, self.input_size

@@ -29,6 +29,7 @@ def argparser():
     P.add_argument('--expand-ratio', type=float, default=1.1)
     P.add_argument('--backbone', type=str, default='mobilenet_v2')
     P.add_argument('--arch', type=str, default='mobilenet_2')
+    P.add_argument('--params-mean-std', type=str, default='snapshot/2021-09-08-1/params_mean_std_12_pose_60_shp_29_exp.mat')
 
     args = P.parse_args()
 
@@ -73,7 +74,8 @@ def test_video(args):
         num_classes=args.num_classes,
         expand_ratio=args.expand_ratio,
         backbone=args.backbone,
-        arch=args.arch)
+        arch=args.arch,
+        params_mean_std=args.params_mean_std)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
@@ -86,7 +88,7 @@ def test_video(args):
             frame = cv2.resize(frame, (frame_width, frame_height))
 
         if args.flip:
-            frame = cv2.flip(frame, 0)
+            frame = cv2.flip(frame, 1)
 
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]
