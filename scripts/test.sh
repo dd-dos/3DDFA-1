@@ -1,5 +1,5 @@
 python3 inference.py --mode='video' \
-                 --model-path='snapshot/2021-09-08/mobilenet_v2_mobilenet_2_wpdc_best.pth.tar' \
+                 --model-path='snapshot/mobilenet_v2_mobilenet_2_finetune_wpdc_best.pth.tar' \
                  --params-mean-std='snapshot/2021-09-08/params_mean_std_12_pose_60_shp_29_exp.mat' \
                  --backbone='mobilenet_v2'\
                  --arch='mobilenet_2'\

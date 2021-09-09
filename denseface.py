@@ -43,16 +43,17 @@ class FaceAlignment:
         """
         self.fm = face3d.face_model.FaceModel(params_mean_std)
 
-        if backbone == 'mobilenet_v1':
-            self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
-        elif backbone == 'mobilenet_v2':
-            self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
+        # if backbone == 'mobilenet_v1':
+        #     self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
+        # elif backbone == 'mobilenet_v2':
+        #     self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
 
-        checkpoint = torch.load(model_path, map_location=device)['state_dict']
-        model_dict = self.dense_face_model.state_dict()
-        for k in checkpoint.keys():
-            model_dict[k.replace('module.', '')] = checkpoint[k]
-        self.dense_face_model.load_state_dict(model_dict)
+        # checkpoint = torch.load(model_path, map_location=device)['state_dict']
+        # model_dict = self.dense_face_model.state_dict()
+        # for k in checkpoint.keys():
+        #     model_dict[k.replace('module.', '')] = checkpoint[k]
+        # self.dense_face_model.load_state_dict(model_dict)
+        self.dense_face_model = torch.jit.load('model.pt')
         self.dense_face_model.eval()
 
         # for param in self.dense_face_model.parameters():

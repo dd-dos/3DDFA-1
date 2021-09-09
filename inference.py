@@ -88,7 +88,7 @@ def test_video(args):
             frame = cv2.resize(frame, (frame_width, frame_height))
 
         if args.flip:
-            frame = cv2.flip(frame, 0)
+            frame = cv2.flip(frame, 1)
 
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]
