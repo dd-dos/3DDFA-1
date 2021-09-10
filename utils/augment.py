@@ -20,7 +20,7 @@ hand_list = [cv2.imread(hand, cv2.IMREAD_UNCHANGED) for hand in hand_path_list]
 
 def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_rate=0.5, vanilla_aug_rate=0.6, flip_rate=0.5):
     if full:
-        img = hide_face(img, params, roi_box)
+        img = hide_face(img, roi_box)
         angles = np.linspace(0, 360, num=13)
         img, params = rotate_samples(img, params, random.choice(angles))
         img = vanilla_aug(image=img)
@@ -69,16 +69,16 @@ vanilla_aug = iaa.OneOf([
     iaa.LinearContrast((1.2,1.7)),
     iaa.LogContrast(gain=(0.5, 1.5)),
     iaa.SigmoidContrast(gain=7, cutoff=(0.4, 0.5)),
-    iaa.AdditivePoissonNoise((10, 15), per_channel=True),
-    iaa.AdditivePoissonNoise((10, 15)),
-    iaa.AdditiveLaplaceNoise(scale=(5, 15)),
-    iaa.AdditiveLaplaceNoise(scale=(5, 15), per_channel=True),
-    iaa.AdditiveGaussianNoise(scale=(20,45)),
-    iaa.AdditiveGaussianNoise(scale=(20,45), per_channel=True),
+    iaa.AdditivePoissonNoise((5, 10), per_channel=True),
+    iaa.AdditivePoissonNoise((5, 10)),
+    iaa.AdditiveLaplaceNoise(scale=(5, 7)),
+    iaa.AdditiveLaplaceNoise(scale=(5, 7), per_channel=True),
+    iaa.AdditiveGaussianNoise(scale=(15,20)),
+    iaa.AdditiveGaussianNoise(scale=(15,20), per_channel=True),
     iaa.ChannelShuffle(p=1),
     iaa.imgcorruptlike.SpeckleNoise(severity=(1,2)),
     iaa.imgcorruptlike.DefocusBlur(severity=(1,2)),
-    iaa.MotionBlur(k=(7, 10), angle=(-45, 45)),
+    iaa.MotionBlur(k=(7, 9), angle=(-45, 45)),
     iaa.GaussianBlur((1.0, 3.0)),
     iaa.AverageBlur(k=(6, 8)),
     iaa.MedianBlur(k=(5, 7)),
@@ -92,7 +92,7 @@ vanilla_aug = iaa.OneOf([
     iaa.Add((-40, 40), per_channel=0.5)
 ])
 
-@numba.njit()
+# @numba.njit()
 def n_rotate_vertex(img, params, angle):
     """
     Create params for a rotated 3dmm.
@@ -165,7 +165,6 @@ def rotate_samples(img, params, angle):
     # r_param = rotate_vertex(img, params, angle)
     r_param = n_rotate_vertex(img, params, angle)
     r_img = ndimage.rotate(img, -angle, reshape=False)
-
     return r_img, r_param
 
 
@@ -331,7 +330,7 @@ def shift(img, params, shift_value=(10,10)):
     return new_img, params
 
 @numba.njit()
-def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=None, radius=None):
+def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=None, radius=None, shift=False):
     camera_matrix = params[:12].reshape(3, -1)
 
     trans = camera_matrix[:, 3]
@@ -377,23 +376,25 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=Non
     canvas = np.zeros((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8)
     canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
 
-    # shift_value = int(max_length/2 * expand_ratio - radius)
-    '''
-    0.125 is purely selected from visualization.
-    '''
-    # shift_value_x = int(box_width * 0.125 + shift_value)
-    # shift_value_y = int(box_height * 0.125 + shift_value)
-    # shift_value_x = shift_value
-    # shift_value_y = shift_value
+    if shift:
+        shift_value = int(max_length/2 - radius)
+        '''
+        0.125 is purely selected from visualization.
+        '''
+        # shift_value_x = int(box_width * 0.125 + shift_value)
+        # shift_value_x = shift_value
+        shift_value_y = shift_value
 
-    # shift_x = random.randrange(-shift_value_x, shift_value_x)
-    # shift_y = random.randrange(-shift_value_y, shift_value_y)
+        # shift_x = random.randrange(-shift_value_x, shift_value_x)
+        shift_y = int(random.randrange(-shift_value_y, shift_value_y))
 
-    # shift_x = shift_value_x
-    # shift_y = shift_value_y
+        # shift_x = shift_value_x
+        # shift_y = shift_value_y
+    else:
+        shift_y = 0
 
     center_x = int(center[0] + crop_size)
-    center_y = int(center[1] + crop_size)
+    center_y = int(center[1] + crop_size) + shift_y
 
     # Top left bottom right.
     y1 = center_y-crop_size
@@ -429,11 +430,11 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=Non
     return cropped_img, re_params, n_roi_box
 
 
-def random_crop(img, roi_box, params, expand_ratio=None, target_size=None, radius=None):
+def random_crop(img, roi_box, params, expand_ratio=None, target_size=None, radius=None, shift=False):
     '''
     Random crop and resize image to target size.
     '''
-    cropped_img, re_params, n_roi_box = random_crop_substep(img, roi_box, params, expand_ratio, target_size, radius)
+    cropped_img, re_params, n_roi_box = random_crop_substep(img, roi_box, params, expand_ratio, target_size, radius, shift)
 
     if target_size is None:
         re_img = cropped_img

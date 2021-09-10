@@ -64,20 +64,21 @@ class DDFAv2_Dataset(data.Dataset):
         params = label['params'].reshape(-1,1)
         roi_box = label['roi_box'][0]
 
+
         if self.aug:
-            img, params, roi_box = random_crop(img, roi_box, params, target_size=None, expand_ratio=1.5)
+            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, expand_ratio=1.5)
             radius = max((roi_box[2]-roi_box[0]), (roi_box[3]-roi_box[1])) / 2
             img, params = ddfa_augment(
                 img=img, 
                 params=params, 
                 roi_box=roi_box, 
-                full=False, 
+                full=True, 
                 hide_face_rate=self.hide_face_rate, 
                 rotate_rate=self.rotate_rate, 
                 vanilla_aug_rate=self.vanilla_aug_rate,
                 flip_rate=self.flip_rate,
             )
-            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius)
+            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius, shift=True)
 
         return img, params
 

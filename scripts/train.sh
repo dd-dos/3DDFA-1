@@ -8,8 +8,7 @@ LOG_FILE="${LOG_DIR}/${LOG_ALIAS}_`date +'%Y-%m-%d_%H:%M.%S'`.log"
 #echo $LOG_FILE
 
 python3 train.py --backbone="mobilenet_v2" \
-                --arch="mobilenet_2" \
-                --sub-name="no-shift-center-2" \
+                --arch="mobilenet_1" \
                 --snapshot="snapshot/phase1_wpdc" \
                 --opt-style='resample' \
                 --resample-num=132 \
@@ -26,8 +25,8 @@ python3 train.py --backbone="mobilenet_v2" \
                 --val-path 'data/AFLW2000_3ddfa' \
                 --use-amp \
                 --num-log-samples=32 \
-                --loss 'wpdc' \
+                --loss 'mixed' \
                 --use-scheduler \
                 --clearml \
                 --task-name '3DDFA-300WLP-300VW-closed-eyes-WPDC-loss' \
-                --resume 'snapshot/2021-09-09/mobilenet_v2_mobilenet_2_no-shift-center_wpdc_best.pth.tar'
+                --resume 'snapshot/2021-09-10/mobilenet_v2_mobilenet_1_3DDFA_wpdc_best.pth.tar'
