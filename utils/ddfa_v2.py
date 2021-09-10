@@ -18,9 +18,10 @@ class DDFAv2_Dataset(data.Dataset):
                 root, 
                 transform=None, 
                 aug=True, 
-                hide_face_rate=0.5, 
-                rotate_rate=0.5, 
-                vanilla_aug_rate=0.6,
+                hide_face_rate=0.75, 
+                rotate_rate=0.75,
+                vanilla_aug_rate=0.9,
+                flip_rate=0.5
                 ):
         if isinstance(root, list):
             self.file_list = root
@@ -32,6 +33,7 @@ class DDFAv2_Dataset(data.Dataset):
         self.hide_face_rate = hide_face_rate
         self.rotate_rate = rotate_rate
         self.vanilla_aug_rate = vanilla_aug_rate
+        self.flip_rate=flip_rate
 
     def __len__(self):
         return len(self.file_list)
@@ -59,11 +61,12 @@ class DDFAv2_Dataset(data.Dataset):
         img = self.img_loader(img_path)
         label = sio.loadmat(label_path)
 
-        params = label['params'].reshape(101,1)
+        params = label['params'].reshape(-1,1)
         roi_box = label['roi_box'][0]
 
         if self.aug:
-            img, params, roi_box = random_crop(img, roi_box, params, target_size=128)
+            img, params, roi_box = random_crop(img, roi_box, params, target_size=None, expand_ratio=1.5)
+            radius = max((roi_box[2]-roi_box[0]), (roi_box[3]-roi_box[1])) / 2
             img, params = ddfa_augment(
                 img=img, 
                 params=params, 
@@ -71,14 +74,26 @@ class DDFAv2_Dataset(data.Dataset):
                 full=False, 
                 hide_face_rate=self.hide_face_rate, 
                 rotate_rate=self.rotate_rate, 
-                vanilla_aug_rate=self.vanilla_aug_rate
+                vanilla_aug_rate=self.vanilla_aug_rate,
+                flip_rate=self.flip_rate,
             )
+            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius)
 
         return img, params
 
     def _transform_params(self, params):
         t_params = params.reshape(-1,).astype(np.float32)
-        t_params = (t_params - fm.bfm.params_mean_101) / fm.bfm.params_std_101
+        if fm.bfm.params_mean is None:
+            params_mean = np.zeros(t_params.shape)
+        else:
+            params_mean = fm.bfm.params_mean
+
+        if fm.bfm.params_std is None:
+            params_std = np.ones(t_params.shape)
+        else:
+            params_std = fm.bfm.params_std
+
+        t_params = (t_params - params_mean) / params_std
 
         return t_params
 

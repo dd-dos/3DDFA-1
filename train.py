@@ -67,17 +67,20 @@ def parse_args():
     parser.add_argument('--opt-style', default='resample', type=str)  # resample
     parser.add_argument('--resample-num', default=0, type=int)
     parser.add_argument('--loss', default='vdc', type=str)
-    parser.add_argument('--beta', default=0.7, type=float, help='vanilla joint control parameter')
+    parser.add_argument('--beta', default=0.5, type=float, help='vanilla joint control parameter')
     parser.add_argument('--use-amp', action='store_true')
     parser.add_argument('--use-scheduler', action='store_true')
-    parser.add_argument('--scheduler-init-decay-epoch', default=10, type=int)
+    parser.add_argument('--scheduler-init-decay-epoch', default=50, type=int)
     parser.add_argument('--scheduler-min-decay-lr', default=1e-6, type=float)
     parser.add_argument('--scheduler-restart-interval', default=5, type=float)
-    parser.add_argument('--scheduler-restart-lr', default=1e-4, type=float)
+    parser.add_argument('--scheduler-restart-lr', default=1e-5, type=float)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--num-log-samples', default=32, type=int, 
                         help='number of samples for logging')
     parser.add_argument('--clearml', action='store_true')
+    parser.add_argument('--task-name', type=str, default='3DDFA')
+    parser.add_argument('--sub-name', type=str, default='3DDFA')
+    parser.add_argument('--loss-scale', type=float, default='1e-3')
 
     global args
     args = parser.parse_args()
@@ -130,7 +133,7 @@ def train(train_loader, model, optimizer, epoch, scaler):
             else:
                 wpdc_loss = wpdc_criterion(output, target)
                 vdc_loss = vdc_criterion(output, target)
-                total_loss = args.beta*wpdc_loss + (1-args.beta)*vdc_loss*(1e-3)
+                total_loss = args.beta*wpdc_loss + (1-args.beta)*vdc_loss*args.loss_scale
 
             losses.update(total_loss)
 
@@ -164,10 +167,11 @@ def train(train_loader, model, optimizer, epoch, scaler):
                          f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' 
                          f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' 
                          f'Loss {losses.val:.4f} ({losses.avg:.4f})')
-            log_training_samples(input[:args.num_log_samples], output[:args.num_log_samples], target[:args.num_log_samples], writer, ITER, 'Train/End-logging-step')
             writer.add_scalar('Loss/Train', losses.avg, ITER)
             random_bullshit.go(writer, ITER, 'Train')
 
+        if i == len(train_loader)-1:
+            log_training_samples(input[:args.num_log_samples], output[:args.num_log_samples], target[:args.num_log_samples], writer, ITER, 'Train/End-logging-step')
             '''
             Log top-loss samples.
             '''
@@ -267,44 +271,44 @@ def validate(val_loader, model, epoch, optimizer):
         else:
             if wpdc_losses.avg <= WPDC_LOSS:
                 WPDC_LOSS = wpdc_losses.avg
-                filename = f'snapshot/{TODAY}/wpdc_best.pth.tar'
+                filename = f'snapshot/{TODAY}/{args.backbone}_{args.arch}_{args.sub_name}_wpdc_best.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        'optimizer': optimizer.state_dict()
+                        # 'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
             else:
-                filename = f'snapshot/{TODAY}/wpdc_last.pth.tar'
+                filename = f'snapshot/{TODAY}/{args.backbone}_{args.arch}_{args.sub_name}_wpdc_last.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        'optimizer': optimizer.state_dict()
+                        # 'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
             
             if vdc_losses.avg <= VDC_LOSS:
                 VDC_LOSS = vdc_losses.avg
-                filename = f'snapshot/{TODAY}/vdc_best.pth.tar'
+                filename = f'snapshot/{TODAY}/{args.backbone}_{args.arch}_{args.sub_name}_vdc_best.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        'optimizer': optimizer.state_dict()
+                        # 'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
             else:
-                filename = f'snapshot/{TODAY}/vdc_last.pth.tar'
+                filename = f'snapshot/{TODAY}/{args.backbone}_{args.arch}_{args.sub_name}_vdc_last.pth.tar'
                 save_checkpoint(
                     {
                         'epoch': epoch,
                         'state_dict': model.state_dict(),
-                        'optimizer': optimizer.state_dict()
+                        # 'optimizer': optimizer.state_dict()
                     },
                     filename
                 )
@@ -315,7 +319,7 @@ def main():
 
     if args.clearml:
         task = Task.init(project_name="Facial-landmark", 
-                        task_name="3DDFA-Close-eyes-Face-up-Adam")
+                        task_name=args.task_name)
 
     logging.basicConfig(
         format='[%(asctime)s] [p%(process)s] [%(pathname)s:%(lineno)d] [%(levelname)s] %(message)s',
@@ -417,7 +421,7 @@ def main():
     logging.info(f'=> {args.val_path}: {len(val_dataset)}')
 
     train_loader = DataLoader(concat_dataset, batch_size=args.train_batch_size, num_workers=args.workers,
-                              shuffle=True, pin_memory=True, drop_last=True)
+                              shuffle=True, pin_memory=True, drop_last=False)
     val_loader = DataLoader(val_dataset, batch_size=args.val_batch_size, num_workers=args.workers,
                             shuffle=False, pin_memory=True)
 

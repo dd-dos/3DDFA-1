@@ -1,4 +1,3 @@
-from numba.core.types.misc import ExceptionClass
 from utils.face3d.face3d.utils import show_vertices
 import imgaug.augmenters as iaa
 import numpy as np
@@ -30,8 +29,8 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
             img = hide_face(img, roi_box)
 
         if np.random.rand() < rotate_rate:
-            angles = np.linspace(0, 360, num=13)
-            img, params = rotate_samples(img, params, random.choice(angles))
+            angle = random.choice(np.linspace(0, 360, num=13))
+            img, params = rotate_samples(img, params, angle)
 
         if np.random.rand() < vanilla_aug_rate:
             img = vanilla_aug(image=img)
@@ -46,7 +45,17 @@ def hide_face(img, roi_box):
     if np.random.rand() < 0.5:
         img = hand_face(img, roi_box)
     else:
-        img = crop_range(img, ratio=1/4)
+        height, width = img.shape[:2]
+        box_width = roi_box[2] - roi_box[0]
+        box_height = roi_box[3] - roi_box[1]
+        min_width = max(roi_box[0], width-roi_box[2])
+        min_height = max(roi_box[1], height-roi_box[3])
+
+        img = crop_range(img, 
+                        max_width_crop=min_width+box_width/4,
+                        max_height_crop=min_height+box_height/4,
+                        min_width_crop=min_width,
+                        min_height_crop=min_height)
 
     return img
 
@@ -82,7 +91,6 @@ vanilla_aug = iaa.OneOf([
     iaa.Add((-40, 40)),
     iaa.Add((-40, 40), per_channel=0.5)
 ])
-
 
 @numba.njit()
 def n_rotate_vertex(img, params, angle):
@@ -323,7 +331,7 @@ def shift(img, params, shift_value=(10,10)):
     return new_img, params
 
 @numba.njit()
-def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128):
+def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=None, radius=None):
     camera_matrix = params[:12].reshape(3, -1)
 
     trans = camera_matrix[:, 3]
@@ -351,19 +359,17 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     # that a landmark can reach when rotating.
     box_height = box_bot-box_top
     box_width = box_right-box_left
-    radius = max(box_height, box_width) / 2
+
+    if radius is None:
+        radius = max(box_height, box_width) / 2
 
     max_length = 2*np.sqrt(2)*radius
 
     # Crop a bit larger.
     if expand_ratio is None:
-        expand_ratio = random.uniform(0.8, 1.2)
+        expand_ratio = random.uniform(0.8, 1.1)
     else:
-        '''
-        Expand ratio is a little too big, 
-        shift value will be negative and I don't wanna use more ops.")
-        '''
-        expand_ratio = 0.
+        expand_ratio = expand_ratio
 
     crop_size = int(max_length/2 * expand_ratio)
 
@@ -409,8 +415,12 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
 
     cropped_trans = (flip_offset + np.array([-x1, -y1, 0])).reshape(3,) @ flip_matrix.T + norm_trans + trans
 
-    resized_scale = scale / (2*crop_size) * target_size
-    resized_trans = cropped_trans / (2*crop_size) * target_size
+    if target_size is None:
+        resized_scale = scale
+        resized_trans = cropped_trans
+    else:
+        resized_scale = scale / (2*crop_size) * target_size
+        resized_trans = cropped_trans / (2*crop_size) * target_size
 
     re_scaled_rot_matrix = resized_scale * rotation_matrix
     re_camera_matrix = np.concatenate((re_scaled_rot_matrix, resized_trans.reshape(-1,1)), axis=1)
@@ -419,13 +429,18 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=128
     return cropped_img, re_params, n_roi_box
 
 
-def random_crop(img, roi_box, params, expand_ratio=None, target_size=128):
+def random_crop(img, roi_box, params, expand_ratio=None, target_size=None, radius=None):
     '''
     Random crop and resize image to target size.
     '''
-    cropped_img, re_params, n_roi_box = random_crop_substep(img, roi_box, params, expand_ratio, target_size)
-    re_img = cv2.resize(cropped_img, (target_size, target_size))
-    re_roi_box = np.array(n_roi_box) / cropped_img.shape[0] * target_size
+    cropped_img, re_params, n_roi_box = random_crop_substep(img, roi_box, params, expand_ratio, target_size, radius)
+
+    if target_size is None:
+        re_img = cropped_img
+        re_roi_box = np.array(n_roi_box)
+    else:
+        re_img = cv2.resize(cropped_img, (target_size, target_size))
+        re_roi_box = np.array(n_roi_box) / cropped_img.shape[0] * target_size
     # re_pts = fm.reconstruct_vertex(re_img, re_params)[fm.bfm.kpt_ind][:,:2]
     # draw_pts(re_img, re_pts)
     # import ipdb; ipdb.set_trace(context=10)

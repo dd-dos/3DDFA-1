@@ -21,6 +21,7 @@ def parse_param_batch(param):
     offset = p_[:, :, -1].view(N, 3, 1)
     alpha_shp = param[:, 12:72].view(N, -1, 1)
     alpha_exp = param[:, 72:].view(N, -1, 1)
+
     return p, offset, alpha_shp, alpha_exp
 
 
@@ -29,8 +30,8 @@ class VDCLoss(nn.Module):
         super(VDCLoss, self).__init__()
 
         # self.u = _to_tensor(u)
-        self.param_mean = _to_tensor(fm.bfm.params_mean_101)
-        self.param_std = _to_tensor(fm.bfm.params_std_101)
+        self.param_mean = _to_tensor(fm.bfm.params_mean)
+        self.param_std = _to_tensor(fm.bfm.params_std)
         # self.w_shp = _to_tensor(w_shp)
         # self.w_exp = _to_tensor(w_exp)
 
@@ -56,7 +57,7 @@ class VDCLoss(nn.Module):
         # parse param
         p, offset, alpha_shp, alpha_exp = parse_param_batch(param)
         pg, offsetg, alpha_shpg, alpha_expg = parse_param_batch(param_gt)
-
+        
         return (p, offset, alpha_shp, alpha_exp), (pg, offsetg, alpha_shpg, alpha_expg)
 
     def forward_all(self, input, target):

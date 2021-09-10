@@ -28,8 +28,8 @@ class WPDCLoss(nn.Module):
     def __init__(self, opt_style='resample', resample_num=132):
         super(WPDCLoss, self).__init__()
         self.opt_style = opt_style
-        self.param_mean = _to_tensor(fm.bfm.params_mean_101)
-        self.param_std = _to_tensor(fm.bfm.params_std_101)
+        self.param_mean = _to_tensor(fm.bfm.params_mean)
+        self.param_std = _to_tensor(fm.bfm.params_std)
 
         # self.u = _to_tensor(u)
         # self.w_shp = _to_tensor(w_shp)
