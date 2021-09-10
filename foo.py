@@ -1,63 +1,28 @@
+from pathlib import Path
+import numpy as np
+import torch.utils.data as data
 import cv2
-import mediapipe as mp
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-mp_face_mesh = mp.solutions.face_mesh
+from utils.augment import ddfa_augment, random_crop, rotate_samples, flip
+from utils.face3d import face3d
+import scipy.io as sio
+fm = face3d.face_model.FaceModel()
 
-# For webcam input:
-drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-cap = cv2.VideoCapture(0)
-# cap = cv2.VideoCapture('samples/e7fcc117-8877-4902-815c-cb079cd62b88__MmoYJ.mov')
+def img_loader(path):
+    return cv2.imread(path, cv2.IMREAD_COLOR)
 
-frame_width = int(cap.get(3))
-frame_height = int(cap.get(4))
-size = (frame_width, frame_height)
-result = cv2.VideoWriter('mediapipe.mp4', 
-                        cv2.VideoWriter_fourcc(*'MJPG'),
-                        10, size)
+def task(item):
+    img = img_loader(item)
 
-with mp_face_mesh.FaceMesh(
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as face_mesh:
-  while cap.isOpened():
-    success, image = cap.read()
-    if not success:
-      print("Ignoring empty camera frame.")
-      # If loading a video, use 'break' instead of 'continue'.
-      continue
+    label_path = item.replace('jpg','mat')
+    label = sio.loadmat(label_path)
 
-    # Flip the image horizontally for a later selfie-view display, and convert
-    # the BGR image to RGB.
-    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
-    # To improve performance, optionally mark the image as not writeable to
-    # pass by reference.
-    image.flags.writeable = False
-    results = face_mesh.process(image)
+    params = label['params'].reshape(-1,1)
+    roi_box = label['roi_box'][0]
 
-    # Draw the face mesh annotations on the image.
-    image.flags.writeable = True
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    if results.multi_face_landmarks:
-      for face_landmarks in results.multi_face_landmarks:
-        mp_drawing.draw_landmarks(
-            image=image,
-            landmark_list=face_landmarks,
-            connections=mp_face_mesh.FACEMESH_TESSELATION,
-            landmark_drawing_spec=None,
-            connection_drawing_spec=mp_drawing_styles
-            .get_default_face_mesh_tesselation_style())
-        mp_drawing.draw_landmarks(
-            image=image,
-            landmark_list=face_landmarks,
-            connections=mp_face_mesh.FACEMESH_CONTOURS,
-            landmark_drawing_spec=None,
-            connection_drawing_spec=mp_drawing_styles
-            .get_default_face_mesh_contours_style())
-    cv2.imshow('MediaPipe FaceMesh', image)
-    result.write(image)
+    img, params, roi_box = random_crop(img, roi_box, params, target_size=128, expand_ratio=1.5)
+    radius = max((roi_box[2]-roi_box[0]), (roi_box[3]-roi_box[1])) / 2
+    
 
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord('q'):
-      break
-cap.release()
-result.release()
+    img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius)
+
+if __name__ == '__main__':
