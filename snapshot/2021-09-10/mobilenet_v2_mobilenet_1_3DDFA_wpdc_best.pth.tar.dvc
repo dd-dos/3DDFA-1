@@ -1,0 +1,4 @@
+outs:
+- md5: 3d50b95c62954445ca80db2f15cfcc88
+  size: 9660237
+  path: mobilenet_v2_mobilenet_1_3DDFA_wpdc_best.pth.tar
