@@ -25,15 +25,15 @@ def ddfa_augment(img, params, roi_box, full=False, hide_face_rate=0.5, rotate_ra
         img, params = rotate_samples(img, params, random.choice(angles))
         img = vanilla_aug(image=img)
     else:
+        if np.random.rand() < vanilla_aug_rate:
+            img = vanilla_aug(image=img)
+
         if np.random.rand() < hide_face_rate:
             img = hide_face(img, roi_box)
 
         if np.random.rand() < rotate_rate:
             angle = random.choice(np.linspace(0, 360, num=13))
             img, params = rotate_samples(img, params, angle)
-
-        if np.random.rand() < vanilla_aug_rate:
-            img = vanilla_aug(image=img)
 
         if np.random.rand() < flip_rate:
             img, params = flip(img, params)
@@ -69,12 +69,12 @@ vanilla_aug = iaa.OneOf([
     iaa.LinearContrast((1.2,1.7)),
     iaa.LogContrast(gain=(0.5, 1.5)),
     iaa.SigmoidContrast(gain=7, cutoff=(0.4, 0.5)),
-    iaa.AdditivePoissonNoise((5, 10), per_channel=True),
-    iaa.AdditivePoissonNoise((5, 10)),
+    iaa.AdditivePoissonNoise((5, 7), per_channel=True),
+    iaa.AdditivePoissonNoise((5, 7)),
     iaa.AdditiveLaplaceNoise(scale=(5, 7)),
     iaa.AdditiveLaplaceNoise(scale=(5, 7), per_channel=True),
-    iaa.AdditiveGaussianNoise(scale=(15,20)),
-    iaa.AdditiveGaussianNoise(scale=(15,20), per_channel=True),
+    iaa.AdditiveGaussianNoise(scale=(10,15)),
+    iaa.AdditiveGaussianNoise(scale=(10,15), per_channel=True),
     iaa.ChannelShuffle(p=1),
     iaa.imgcorruptlike.SpeckleNoise(severity=(1,2)),
     iaa.imgcorruptlike.DefocusBlur(severity=(1,2)),
@@ -92,7 +92,7 @@ vanilla_aug = iaa.OneOf([
     iaa.Add((-40, 40), per_channel=0.5)
 ])
 
-# @numba.njit()
+@numba.njit()
 def n_rotate_vertex(img, params, angle):
     """
     Create params for a rotated 3dmm.
@@ -162,7 +162,6 @@ def rotate_samples(img, params, angle):
     else:
         params = params.astype(np.float64)
 
-    # r_param = rotate_vertex(img, params, angle)
     r_param = n_rotate_vertex(img, params, angle)
     r_img = ndimage.rotate(img, -angle, reshape=False)
     return r_img, r_param
@@ -381,19 +380,19 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=Non
         '''
         0.125 is purely selected from visualization.
         '''
-        # shift_value_x = int(box_width * 0.125 + shift_value)
-        # shift_value_x = shift_value
+        shift_value_x = shift_value
         shift_value_y = shift_value
 
-        # shift_x = random.randrange(-shift_value_x, shift_value_x)
+        shift_x = int(random.randrange(-shift_value_x, shift_value_x))
         shift_y = int(random.randrange(-shift_value_y, shift_value_y))
 
         # shift_x = shift_value_x
         # shift_y = shift_value_y
     else:
         shift_y = 0
+        shift_x = 0
 
-    center_x = int(center[0] + crop_size)
+    center_x = int(center[0] + crop_size) + shift_x
     center_y = int(center[1] + crop_size) + shift_y
 
     # Top left bottom right.
