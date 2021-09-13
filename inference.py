@@ -8,6 +8,8 @@ import numpy as np
 import torch
 
 from denseface import FaceAlignment
+from denseface_x import FaceAlignmentX
+
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -25,11 +27,14 @@ def argparser():
     P.add_argument('--input-size', type=int, default='120')
     P.add_argument('--num-classes', type=int, default='62')
     P.add_argument('--flip', action='store_true')
+    P.add_argument('--flip-code', type=int, default=0)
     P.add_argument('--squeeze', type=int, default=0)
+    P.add_argument('--zoom', type=float, default=1.)
     P.add_argument('--expand-ratio', type=float, default=1.1)
     P.add_argument('--backbone', type=str, default='mobilenet_v2')
     P.add_argument('--arch', type=str, default='mobilenet_2')
     P.add_argument('--params-mean-std', type=str, default='snapshot/2021-09-08-1/params_mean_std_12_pose_60_shp_29_exp.mat')
+    P.add_argument('--xxx', action='store_true')
 
     args = P.parse_args()
 
@@ -59,7 +64,7 @@ def test_video(args):
         if args.save_path.endswith('avi') or args.save_path.endswith('mp4'):
             result = cv2.VideoWriter(args.save_path, 
                                     cv2.VideoWriter_fourcc(*'MJPG'),
-                                    10, size)
+                                    30, size)
             save_video = True
         else:
             logging.error(f'Invalid save path: {path}.')
@@ -67,28 +72,39 @@ def test_video(args):
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
-    dense_model = FaceAlignment(
-        model_path=args.model_path, 
-        input_size=args.input_size, 
-        device='cpu', 
-        num_classes=args.num_classes,
-        expand_ratio=args.expand_ratio,
-        backbone=args.backbone,
-        arch=args.arch,
-        params_mean_std=args.params_mean_std)
+    if args.xxx:
+        dense_model = FaceAlignmentX(
+            model_path=args.model_path, 
+            input_size=args.input_size, 
+            device='cpu', 
+            num_classes=args.num_classes,
+            expand_ratio=args.expand_ratio,
+            backbone=args.backbone,
+            arch=args.arch,
+            params_mean_std=args.params_mean_std)
+    else:
+        dense_model = FaceAlignment(
+            model_path=args.model_path, 
+            input_size=args.input_size, 
+            device='cpu', 
+            num_classes=args.num_classes,
+            expand_ratio=args.expand_ratio,
+            backbone=args.backbone,
+            arch=args.arch,
+            params_mean_std=args.params_mean_std)
     # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        
+
         if args.squeeze != 0:
             frame = cv2.copyMakeBorder(frame, 0, 0, args.squeeze, args.squeeze, cv2.BORDER_CONSTANT, 0)
             frame = cv2.resize(frame, (frame_width, frame_height))
 
         if args.flip:
-            frame = cv2.flip(frame, 1)
+            frame = cv2.flip(frame, args.flip_code)
 
         detector_info = face_detector.forward(torch.tensor(frame))
         detected_faces = detector_info[0]
@@ -122,6 +138,10 @@ def test_video(args):
      
         if save_video:
             result.write(frame)
+
+        if args.zoom:
+            size = (int(frame_width*args.zoom), int(frame_height*args.zoom))
+            frame = cv2.resize(frame, size)
 
         cv2.imshow('', frame)
         # cv2.waitKey(0)

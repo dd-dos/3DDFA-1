@@ -81,7 +81,7 @@ vanilla_aug = iaa.OneOf([
     iaa.MotionBlur(k=(7, 9), angle=(-45, 45)),
     iaa.GaussianBlur((1.0, 3.0)),
     iaa.AverageBlur(k=(6, 8)),
-    iaa.MedianBlur(k=(5, 7)),
+    iaa.MedianBlur(k=(3, 5)),
     iaa.CoarseDropout((0.02,0.05), size_percent=(0.15,0.5)),
     iaa.CoarseDropout((0.02,0.05), size_percent=(0.15,0.5), per_channel=0.5),
     iaa.Multiply((0.5, 1.5)),
@@ -212,8 +212,11 @@ def hand_face(face_img, face_location):
     y_range = np.linspace(face_location[1], face_location[1] + face_h * 3 / 4, num=10)
     paste_x = int(random.choice(x_range))
     paste_y = int(random.choice(y_range))
-
+    
+    import time
+    t0 = time.time()
     full_img = overlay_transparent(face_img, hand_resized, (paste_x, paste_y), scale=0.93)
+    print(time.time()-t0)
 
     return full_img
 
@@ -268,10 +271,10 @@ def crop_range(img,
         x_rd = np.random.rand()
         if x_rd > 0.5:
             # print('x_rd > 0.5')
-            img[0:x_crop_length, :, :] = 0.
+            img[0:x_crop_length, :, :] = random.randint(0,255)
         else:
             # print('x_rd <= 0.5')
-            img[width-x_crop_length:, :, :] = 0.
+            img[width-x_crop_length:, :, :] = random.randint(0,255)
 
         return img
 
@@ -279,10 +282,10 @@ def crop_range(img,
         y_rd = np.random.rand()
         if y_rd > 0.5:
             # print('y_rd > 0.5')
-            img[:, 0:y_crop_length, :] = 0.
+            img[:, 0:y_crop_length, :] = random.randint(0,255)
         else:
             # print('y_rd <= 0.5')
-            img[:, height-y_crop_length:, :] = 0.
+            img[:, height-y_crop_length:, :] = random.randint(0,255)
 
         return img
 
@@ -328,7 +331,7 @@ def shift(img, params, shift_value=(10,10)):
 
     return new_img, params
 
-@numba.njit()
+# @numba.njit()
 def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=None, radius=None, shift=False):
     camera_matrix = params[:12].reshape(3, -1)
 
@@ -372,7 +375,7 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=Non
     crop_size = int(max_length/2 * expand_ratio)
 
     img_height, img_width, channel = img.shape
-    canvas = np.zeros((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8)
+    canvas = np.ones((img_height+2*crop_size, img_width+2*crop_size, channel), dtype=np.uint8) * random.randint(0,255)
     canvas[crop_size:img_height+crop_size, crop_size:img_width+crop_size, :] = img
 
     if shift:
@@ -406,7 +409,7 @@ def random_crop_substep(img, roi_box, params, expand_ratio=None, target_size=Non
     n_box_top = box_top + crop_size - y1
     n_box_bot = box_bot + crop_size - y1
     n_roi_box = [n_box_left, n_box_top, n_box_right, n_box_bot]
-
+    
     cropped_img = canvas[y1:y2, x1:x2]
 
     flip_matrix = np.array([[1,0,0],[0,-1,0],[0,0,1]], dtype=np.float64)

@@ -7,6 +7,7 @@ import torch.utils.data as data
 import cv2
 from .augment import ddfa_augment, random_crop
 from .face3d import face3d
+from .face3d.face3d.utils import show_pts
 import scipy.io as sio
 fm = face3d.face_model.FaceModel()
 
@@ -21,7 +22,8 @@ class DDFAv2_Dataset(data.Dataset):
                 hide_face_rate=0.75, 
                 rotate_rate=0.75,
                 vanilla_aug_rate=0.9,
-                flip_rate=0.5
+                flip_rate=0.5,
+                shift=True
                 ):
         if isinstance(root, list):
             self.file_list = root
@@ -34,6 +36,7 @@ class DDFAv2_Dataset(data.Dataset):
         self.rotate_rate = rotate_rate
         self.vanilla_aug_rate = vanilla_aug_rate
         self.flip_rate=flip_rate
+        self.shift = shift
 
     def __len__(self):
         return len(self.file_list)
@@ -64,9 +67,14 @@ class DDFAv2_Dataset(data.Dataset):
         params = label['params'].reshape(-1,1)
         roi_box = label['roi_box'][0]
 
+        # pts = fm.reconstruct_vertex(img, params, False)[fm.bfm.kpt_ind]
+        # show_pts(img, pts, 'original')
 
         if self.aug:
             img, params, roi_box = random_crop(img, roi_box, params, target_size=128, expand_ratio=1.5)
+            # pts = fm.reconstruct_vertex(img, params, False)[fm.bfm.kpt_ind]
+            # show_pts(img, pts, 'first crop')
+
             radius = max((roi_box[2]-roi_box[0]), (roi_box[3]-roi_box[1])) / 2
             img, params = ddfa_augment(
                 img=img, 
@@ -78,7 +86,18 @@ class DDFAv2_Dataset(data.Dataset):
                 vanilla_aug_rate=self.vanilla_aug_rate,
                 flip_rate=self.flip_rate,
             )
-            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius, shift=True)
+
+            # pts = fm.reconstruct_vertex(img, params, False)[fm.bfm.kpt_ind]
+            # show_pts(img, pts, 'augment')
+            # cv2.waitKey(0)
+
+            img, params, roi_box = random_crop(img, roi_box, params, target_size=128, radius=radius, shift=self.shift)
+            
+            # pts = fm.reconstruct_vertex(img, params, False)[fm.bfm.kpt_ind]
+            # show_pts(img, pts, 'second crop')
+
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
 
         return img, params
 
@@ -98,3 +117,7 @@ class DDFAv2_Dataset(data.Dataset):
 
         return t_params
 
+if __name__=='__main__':
+    dataset = DDFAv2_Dataset('data/AFLW2000_3ddfa')
+    for idx in dataset:
+        _ = dataset[idx]

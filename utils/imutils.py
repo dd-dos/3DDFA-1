@@ -20,32 +20,6 @@ def crop_balance(img, detected_face, expand_ratio=1, shift=0.):
 
     cropped_img = img[roi_box[1]:roi_box[3], roi_box[0]:roi_box[2]]
 
-    '''
-    drake
-    '''
-    # left = int(left)
-    # top = int(top)
-    # right = int(right)
-    # bottom = int(bottom)
-
-    # image_width, image_height = img.shape[1], img.shape[0]
-    # width, height = right - left, bottom - top
-    # expand_ratio -= 1
-    # padding_height = int(height * expand_ratio)
-    # padding_width = int(width * expand_ratio)
-
-    # left = max(0, left - padding_width)
-    # right = min(image_width, right + padding_width)
-
-    # top = max(0, top - padding_height)
-    # bottom = min(image_height, bottom + padding_height)
-
-    # center_x = int((left + right)/2)
-    # center_y = int((bottom + top)/2)
-
-    # cropped_img = img[top:bottom, left:right]
-    # import cv2
-    # cv2.imwrite("xxx.png", cropped_img)
     return cropped_img, size, np.array([center_x, center_y])
 
 def cropped_to_orginal(pts, length, center, resize):
@@ -62,6 +36,57 @@ def cropped_to_orginal(pts, length, center, resize):
     coord_original_cropped_pts = pts / resize * length
     coord_original_cropped_pts[0] += center[0]-length/2
     coord_original_cropped_pts[1] += center[1]-length/2
+
+    return coord_original_cropped_pts
+
+def crop_balance_x(img, detected_face, expand_ratio=1, shift=0.):
+    if len(detected_face) == 5:
+        left, top, right, bottom, _ = detected_face
+    else:
+        left, top, right, bottom = detected_face
+
+    left = int(left)
+    top = int(top)
+    right = int(right)
+    bottom = int(bottom)
+
+    image_width, image_height = img.shape[1], img.shape[0]
+    width, height = right - left, bottom - top
+    expand_ratio -= 1
+    padding_height = int(height * expand_ratio)
+    padding_width = int(width * expand_ratio)
+
+    left = max(0, left - padding_width)
+    right = min(image_width, right + padding_width)
+
+    top = max(0, top - padding_height)
+    bottom = min(image_height, bottom + padding_height)
+
+    center_x = int((left + right)/2)
+    center_y = int((bottom + top)/2)
+
+    cropped_img = img[top:bottom, left:right]
+    new_height, new_width = bottom-top, right-left
+
+    return cropped_img, new_height, new_width, padding_height, padding_width, np.array([center_x, center_y])
+
+def cropped_to_orginal_x(pts, height, width, center, resize):
+    """
+    Get original coordinate of pts inside a cropped image.
+
+    Params:
+    :pts: list of points inside cropped images.
+    :length: we expect the original image to be a square one,
+            this value is the size of the image.
+    :center: center of the cropped image relative to the original one.
+    :resize: resize size if the cropped image is resized.
+    """
+    coord_original_cropped_pts = np.zeros(pts.shape)
+    coord_original_cropped_pts[0] = pts[0] / resize * width
+    coord_original_cropped_pts[1] = pts[1] / resize * height
+
+    coord_original_cropped_pts[0] += center[0]-width/2
+    coord_original_cropped_pts[1] += center[1]-height/2
 
     return coord_original_cropped_pts
 

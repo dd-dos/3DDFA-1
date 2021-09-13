@@ -12,10 +12,9 @@ from utils.face3d.face3d.utils import *
 import mobilenet_v1
 import mobilenet_v2
 
-
 logging.getLogger().setLevel(logging.INFO)
 
-class FaceAlignment:
+class FaceAlignmentX:
     def __init__(self, 
                  model_path, 
                  landmarks_type='3D',
@@ -43,17 +42,17 @@ class FaceAlignment:
         """
         self.fm = face3d.face_model.FaceModel(params_mean_std)
 
-        if backbone == 'mobilenet_v1':
-            self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
-        elif backbone == 'mobilenet_v2':
-            self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
+        # if backbone == 'mobilenet_v1':
+        #     self.dense_face_model = getattr(mobilenet_v1, arch)(num_classes=num_classes)
+        # elif backbone == 'mobilenet_v2':
+        #     self.dense_face_model = getattr(mobilenet_v2, arch)(num_classes=num_classes)
 
-        checkpoint = torch.load(model_path, map_location=device)['state_dict']
-        model_dict = self.dense_face_model.state_dict()
-        for k in checkpoint.keys():
-            model_dict[k.replace('module.', '')] = checkpoint[k]
-        self.dense_face_model.load_state_dict(model_dict)
-        # self.dense_face_model = torch.jit.load('model.pt')
+        # checkpoint = torch.load(model_path, map_location=device)['state_dict']
+        # model_dict = self.dense_face_model.state_dict()
+        # for k in checkpoint.keys():
+        #     model_dict[k.replace('module.', '')] = checkpoint[k]
+        # self.dense_face_model.load_state_dict(model_dict)
+        self.dense_face_model = torch.jit.load('model.pt')
         self.dense_face_model.eval()
 
         # for param in self.dense_face_model.parameters():
@@ -102,7 +101,7 @@ class FaceAlignment:
         extra_list = []
 
         for idx, det in enumerate(detected_faces):
-            cropped_inp, length, center = imutils.crop_balance(padded_img, det, expand_ratio=self.expand_ratio)
+            cropped_inp, cropped_height, cropped_width, padding_height, padding_width, center = imutils.crop_balance_x(padded_img, det, expand_ratio=self.expand_ratio)
             inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
             ori_inp = inp.copy()
             cv2.imwrite('inp.jpg', inp)
@@ -121,7 +120,10 @@ class FaceAlignment:
             params_list.append(out.numpy().reshape(-1,))
             extra_list.append(
                 {
-                    'length': length,
+                    'padding_height': padding_height,
+                    'padding_width': padding_width,
+                    'cropped_height': cropped_height,
+                    'cropped_width': cropped_width,
                     'center': center,
                     'pad': pad,
                 }
@@ -129,81 +131,6 @@ class FaceAlignment:
             det -= pad
         
         return params_list, extra_list
-
-    @torch.no_grad()
-    def get_batch_3dmm_params(self, image_or_path_list, detected_faces_list):
-        image_batch = torch.zeros(len(detected_faces_list), 3, self.input_size, self.input_size, device=self.device)
-        extra_list = []
-
-        for idx, image_or_path in enumerate(image_or_path_list):
-            if isinstance(image_or_path, str):
-                img = cv2.imread(image_or_path)
-            else:
-                img = image_or_path
-
-            detected_faces = detected_faces_list[idx]
-
-            if detected_faces is None or len(detected_faces) == 0:
-                logging.warn(f"No faces were detected at image {idx}th.")
-                continue
-
-            if len(detected_faces) > 1:
-                logging.warn(f"There are more than 1 face in image. Please check image {idx}th")
-            
-            pad = int(max(img.shape)/4)
-            padded_img = cv2.copyMakeBorder(
-                img, pad, pad, pad, pad, 
-                cv2.BORDER_CONSTANT, value=[0, 0, 0]
-            )
-
-            for det in detected_faces:
-                det += pad
-
-            cropped_inp, length, center = \
-            imutils.crop_balance(
-                padded_img, 
-                detected_faces[0], 
-                expand_ratio=self.expand_ratio
-            )
-            
-            inp = cv2.resize(cropped_inp, (self.input_size,self.input_size), interpolation=cv2.INTER_CUBIC)
-            inp = self.transformer(inp)
-            inp = inp.to(self.device)
-
-            image_batch[idx] = inp
-            extra_list.append(
-                {
-                    'length': length,
-                    'center': center,
-                    'pad': pad,
-                }
-            )
-        
-        image_batch = image_batch.to(self.device)
-        if self.max_batch_size == -1:
-            params_batch = self.dense_face_model(image_batch).cpu()
-            empty_cache_memory()
-        else:
-            div_batch = len(image_batch) // self.max_batch_size
-            mod_batch = len(image_batch) % self.max_batch_size
-            all_result = []
-            for index in range(div_batch):
-                sub_batch_tensor = image_batch[index*self.max_batch_size:
-                                                (index+1)*self.max_batch_size, :, :, :]
-                results = self.dense_face_model(sub_batch_tensor).cpu()
-                all_result.extend(results)
-                empty_cache_memory()
-
-            if mod_batch > 0:
-                sub_batch_tensor = image_batch[-mod_batch:, :, :, :]
-                results = self.dense_face_model(sub_batch_tensor).cpu()
-
-                all_result.extend(results)
-                empty_cache_memory()
-            
-            params_batch = torch.stack(all_result, dim=0)
-
-        return params_batch.numpy(), extra_list
 
     @torch.no_grad()
     def draw_landmarks(self, img, detected_faces, draw_eyes=False, draw_angles=False, no_background=True):
@@ -300,43 +227,6 @@ class FaceAlignment:
 
         return meta
 
-    def get_batch_landmarks_and_angles(self, image_or_path_list, detected_faces_list):
-        """
-        Get landmarks and head pose angle of an image list.
-
-        TODO: utilize numba.
-        """
-        landmarks_list, angles_list = \
-        self.get_batch_landmarks_and_angles_from_images(
-            image_or_path_list, detected_faces_list
-        )
-
-        if self.landmarks_type == '2D':
-            landmarks_list = [landmarks_list[i][:2] for i in range(len(landmarks_list))]
-        
-        for i in range(len(angles_list)):
-            angles_list[i] = [
-                angles_list[i]['pitch'],
-                angles_list[i]['roll'],
-                angles_list[i]['yaw'],
-            ] 
-
-        meta = {
-            'landmarks': landmarks_list,
-            'rotation_angles': angles_list,
-        }
-
-        # for idx in range(len(detected_faces_list)):
-        #     pts = landmarks_list[idx][:, :2]
-        #     img = image_or_path_list[idx]
-            
-        #     for _pts in pts:
-        #         cv2.circle(img, _pts.astype(int), 3, (0,255,0), -1, 10)
-
-        #     cv2.imwrite(f'samples/{idx}.jpg', img)
-
-        return meta
-
     def get_landmarks(self, image_or_path, detected_faces):
         """
         Predict 68 landmarks points of an image.
@@ -354,25 +244,6 @@ class FaceAlignment:
         landmarks = self.get_landmarks_from_image(image_or_path, detected_faces)
 
         return landmarks
-
-    def get_batch_landmarks(self, image_or_path_list, detected_faces_list):
-        """
-        Predict the landmarks for each face present in the image.
-        This function predicts a set of 68 2D or 3D images, one for each image present.
-        If detected_faces is None the method will also run a face detector.
-
-        Arguments:
-            image_or_path {string or numpy.array or torch.tensor} -- The input image or path to it.
-        Keyword Arguments:
-            detected_faces {list of numpy.array} -- list of bounding boxes, one for each face found
-            in the image (default: {None})
-
-        Return:
-        :landmarks_list: list of 68 points landmarks
-        """
-        landmarks_list = self.get_batch_landmarks_from_images(image_or_path_list, detected_faces_list)
-
-        return landmarks_list
 
     def get_landmarks_from_image(self, image_or_path, detected_faces):
         """
@@ -416,51 +287,6 @@ class FaceAlignment:
 
         return landmarks
 
-    def get_batch_landmarks_from_images(self, image_or_path_list, detected_faces_list):
-        """
-        Predict the landmarks for each face present in the image.
-        This function predicts a set of 68 2D or 3D images, one for each image present.
-        If detected_faces is None the method will also run a face detector.
-        
-        Arguments:
-            image_or_path {string or numpy.array or torch.tensor} -- The input image or path to it.
-        Keyword Arguments:
-            detected_faces {list of numpy.array} -- list of bounding boxes, one for each face found
-            in the image (default: {None})
-        
-        Return:
-        :landmarks_list: list of 68 points landmarks.
-        """
-        landmarks_list = []
-
-        params_batch, extra_list = \
-        self.get_batch_3dmm_params(
-            image_or_path_list, 
-            detected_faces_list
-        )
-
-        for idx in range(len(extra_list)):
-            params = params_batch[idx]
-            extra = extra_list[idx]
-
-            center = extra[idx]['center']
-            length = extra[idx]['length']
-            pad = extra[idx]['pad']
-
-            vertex = self.fm.reconstruct_vertex(np.zeros((256,256,3)), params)[self.fm.bfm.kpt_ind]
-
-            pts_img = imutils.cropped_to_orginal(
-                vertex, length, center, self.input_size
-            )
-
-            # De-pad
-            pts_img[0] -= pad
-            pts_img[1] -= pad
-
-            landmarks_list.append(pts_img.T)
-        
-        return landmarks_list
-
     def get_landmarks_and_angles_from_image(self, image_or_path, detected_faces):
         """
         Predict 68 landmarks points of an image.
@@ -486,12 +312,13 @@ class FaceAlignment:
 
         for idx, params in enumerate(params_list):
             center = extra_list[idx]['center']
-            length = extra_list[idx]['length']
+            cropped_height = extra_list[idx]['cropped_height']
+            cropped_width = extra_list[idx]['cropped_width']
             pad = extra_list[idx]['pad']
 
             vertex = self.fm.reconstruct_vertex(np.zeros((self.input_size,self.input_size,3)), params)[self.fm.bfm.kpt_ind][:,:2].T
 
-            pts_img = imutils.cropped_to_orginal(vertex, length, center, self.input_size)
+            pts_img = imutils.cropped_to_orginal_x(vertex, cropped_height, cropped_width, center, self.input_size)
 
             # De-pad
             pts_img[0] -= pad

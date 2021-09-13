@@ -1,9 +1,10 @@
 python3 inference.py --mode='video' \
-                 --model-path='snapshot/mobilenet_v2_mobilenet_2_finetune_wpdc_best.pth.tar' \
-                 --params-mean-std='snapshot/2021-09-08/params_mean_std_12_pose_60_shp_29_exp.mat' \
+                 --model-path='snapshot/2021-09-10/mobilenet_v2_mobilenet_1_3DDFA_vdc_best.pth.tar' \
+                 --params-mean-std='snapshot/2021-09-10/params_mean_std.mat' \
                  --backbone='mobilenet_v2'\
-                 --arch='mobilenet_2'\
+                 --arch='mobilenet_1'\
                  --input-size=128 \
                  --num-classes=101 \
                  --save-path='foo.mp4' \
-                 --expand-ratio=1.1
+                 --expand-ratio=1.1 \
+                 --zoom 1.
