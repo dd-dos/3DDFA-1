@@ -9,7 +9,6 @@ import numpy as np
 import argparse
 import time
 import logging
-import scipy.io as sio
 
 import torch
 import torch.nn as nn
@@ -19,7 +18,6 @@ import mobilenet_v1
 import mobilenet_v2
 import torch.backends.cudnn as cudnn
 
-from utils.compute import RunningStats
 from utils.imutils import ToTensorGjz, NormalizeGjz
 from utils.visualize import AverageMeter
 from utils.ddfa_v2 import DDFAv2_Dataset

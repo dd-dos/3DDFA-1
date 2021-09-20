@@ -27,14 +27,16 @@ def argparser():
     P.add_argument('--input-size', type=int, default='120')
     P.add_argument('--num-classes', type=int, default='62')
     P.add_argument('--flip', action='store_true')
-    P.add_argument('--flip-code', type=int, default=0)
-    P.add_argument('--squeeze', type=int, default=0)
+    P.add_argument('--flip-code', type=int, default=0, help='0 for flipping vertically, 1 for flipping horizontally')
+    P.add_argument('--pad-frame', type=int, default=0, help='padding left right and resize to squeeze image')
     P.add_argument('--zoom', type=float, default=1.)
     P.add_argument('--expand-ratio', type=float, default=1.1)
     P.add_argument('--backbone', type=str, default='mobilenet_v2')
     P.add_argument('--arch', type=str, default='mobilenet_2')
     P.add_argument('--params-mean-std', type=str, default='snapshot/2021-09-08-1/params_mean_std_12_pose_60_shp_29_exp.mat')
-    P.add_argument('--xxx', action='store_true')
+    P.add_argument('--force-resize', action='store_true')
+    P.add_argument('--connected', action='store_true')
+    P.add_argument('--debug', action='debug')
 
     args = P.parse_args()
 
@@ -72,7 +74,7 @@ def test_video(args):
 
     face_detector = torch.jit.load('retinaface/scripted_model_cpu_19042021.pt')
 
-    if args.xxx:
+    if args.force_resize:
         dense_model = FaceAlignmentX(
             model_path=args.model_path, 
             input_size=args.input_size, 
@@ -81,7 +83,8 @@ def test_video(args):
             expand_ratio=args.expand_ratio,
             backbone=args.backbone,
             arch=args.arch,
-            params_mean_std=args.params_mean_std)
+            params_mean_std=args.params_mean_std,
+            debug=args.debug)
     else:
         dense_model = FaceAlignment(
             model_path=args.model_path, 
@@ -92,15 +95,14 @@ def test_video(args):
             backbone=args.backbone,
             arch=args.arch,
             params_mean_std=args.params_mean_std)
-    # pose_model = facelib.models.PoseModel(args.model_path, img_size=size)
     
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        if args.squeeze != 0:
-            frame = cv2.copyMakeBorder(frame, 0, 0, args.squeeze, args.squeeze, cv2.BORDER_CONSTANT, 0)
+        if args.pad_frame != 0:
+            frame = cv2.copyMakeBorder(frame, 0, 0, args.pad_frame, args.pad_frame, cv2.BORDER_CONSTANT, 0)
             frame = cv2.resize(frame, (frame_width, frame_height))
 
         if args.flip:
@@ -126,14 +128,13 @@ def test_video(args):
                     detected_faces,
                     draw_eyes=False,
                     no_background=False,
-                    draw_angles=True)
+                    draw_angles=True,
+                    connected=args.connected)
         except Exception as e:
             import traceback
             traceback.print_exc()
             print(e)
         print(time.time()-t0)
-        # processed_frame = dense_model.draw_mesh(frame)
-        # angles_dict = dense_model.get_rotate_angles(img, detected_faces)
         logging.info(f'Landmarks detection took {time.time() - t0}')
      
         if save_video:
@@ -174,10 +175,6 @@ def test_image(args):
         num_classes=args.num_classes,
         expand_ratio=1.1)
 
-    # processed_frame = dense_model.draw_landmarks(
-    #     args.img_path, 
-    #     detected_faces=torch.tensor([[0,0,img.shape[0], img.shape[0]]])
-    # )
     processed_frame = dense_model.draw_landmarks(
         args.img_path, 
         detected_faces=detected_faces,
@@ -188,22 +185,6 @@ def test_image(args):
     cv2.imshow('', processed_frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-# def test_full(args):
-#     """
-#     Detect 68 3D landmarks of an image.
-#     """
-#     if args.img_path is not None:
-#         path = Path(args.img_path)
-#         if path.exists():
-#             img = cv2.imread(args.img_path)
-#             height, width, _ = img.shape
-#             model = facelib.PoseModel(args.model_path,
-#                                   img_size=(height, width))
-#             pose_image = model.draw_pose(img)
-#             cv2.imshow('', pose_image)
-#             cv2.waitKey(0)
-#             cv2.destroyAllWindows()
 
 if __name__=="__main__":
     args = argparser()

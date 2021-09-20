@@ -7,4 +7,5 @@ python3 inference.py --mode='video' \
                  --num-classes=101 \
                  --save-path='foo.mp4' \
                  --expand-ratio=1.1 \
-                 --zoom 1.
+                 --zoom 1. \
+                 --connected 
